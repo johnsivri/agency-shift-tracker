@@ -4,11 +4,17 @@ const today = new Date();
 const isoToday = toDateInput(today);
 const tomorrow = addDays(isoToday, 1);
 const nextWeek = addDays(isoToday, 6);
+const SHIFT_DEFINITIONS = {
+  A: { start: "06:00", end: "18:00", label: "A" },
+  B: { start: "18:00", end: "06:00", label: "B" },
+  C: { start: "06:00", end: "18:00", label: "C" },
+  D: { start: "18:00", end: "06:00", label: "D" }
+};
 
 const seedData = {
   shifts: [
-    { id: uid(), date: isoToday, officer: "Jordan Lee", agency: "North Precinct", start: "07:00", end: "15:00", role: "Patrol", status: "Worked", notes: "Zone 2" },
-    { id: uid(), date: tomorrow, officer: "M. Alvarez", agency: "Court Services", start: "15:00", end: "23:00", role: "Transport", status: "Scheduled", notes: "" }
+    { id: uid(), date: isoToday, officer: "Jordan Lee", agency: "North Precinct", shift: "A", start: "06:00", end: "18:00", status: "Worked", notes: "Zone 2" },
+    { id: uid(), date: tomorrow, officer: "M. Alvarez", agency: "Court Services", shift: "B", start: "18:00", end: "06:00", status: "Scheduled", notes: "" }
   ],
   overtime: [
     { id: uid(), date: isoToday, officer: "Jordan Lee", start: "15:00", end: "18:30", reason: "Holdover", approval: "Pending", caseNumber: "", courtRelated: false },
@@ -44,9 +50,14 @@ document.querySelectorAll(".tab").forEach((tab) => {
   tab.addEventListener("click", () => activateTab(tab.dataset.tab));
 });
 
+document.querySelector("#shiftForm").elements.shift.addEventListener("change", (event) => {
+  applyShiftHours(event.currentTarget.form);
+});
+
 document.querySelector("#shiftForm").addEventListener("submit", (event) => {
   event.preventDefault();
-  saveForm("shifts", event.currentTarget, ["date", "officer", "agency", "start", "end", "role", "status", "notes"]);
+  applyShiftHours(event.currentTarget);
+  saveForm("shifts", event.currentTarget, ["date", "officer", "agency", "shift", "start", "end", "status", "notes"]);
 });
 
 document.querySelector("#overtimeForm").addEventListener("submit", (event) => {
@@ -76,6 +87,7 @@ document.querySelector("#resetDemo").addEventListener("click", () => {
 });
 
 render();
+applyShiftHours(document.querySelector("#shiftForm"));
 
 function activateTab(name) {
   document.querySelectorAll(".tab").forEach((tab) => tab.classList.toggle("is-active", tab.dataset.tab === name));
@@ -102,6 +114,7 @@ function saveForm(collection, form, fields) {
 
   form.reset();
   form.elements.id.value = "";
+  if (collection === "shifts") applyShiftHours(form);
   persist();
   render();
 }
@@ -119,6 +132,7 @@ function editRecord(collection, id) {
       form.elements[key].value = value;
     }
   });
+  if (collection === "shifts") applyShiftHours(form);
   form.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
@@ -130,7 +144,8 @@ function deleteRecord(collection, id) {
 
 function render() {
   const filters = getFilters();
-  const shifts = filterRecords(state.shifts, filters, ["date", "officer", "agency", "role", "status", "notes"]);
+  normalizeShiftRecords();
+  const shifts = filterRecords(state.shifts, filters, ["date", "officer", "agency", "shift", "status", "notes"]);
   const overtime = filterRecords(state.overtime, filters, ["date", "officer", "reason", "approval", "caseNumber"]);
   const court = filterRecords(state.court, filters, ["date", "officer", "caseNumber", "court", "status", "notes"]);
   const swaps = filterRecords(state.swaps, filters, ["giveDate", "takeDate", "requester", "covering", "giveShift", "takeShift", "status", "notes"]);
@@ -139,7 +154,8 @@ function render() {
     formatDate(item.date),
     item.officer,
     item.agency || "-",
-    `${item.start} - ${item.end}`,
+    `${item.shift} shift`,
+    `${formatMilitaryTime(item.start)} - ${formatMilitaryTime(item.end)}`,
     formatHours(hoursBetween(item.start, item.end)),
     statusPill(item.status),
     rowActions("shifts", item.id)
@@ -234,6 +250,7 @@ function statusPill(status) {
 }
 
 function renderSummary(filters) {
+  normalizeShiftRecords();
   const inMonth = (item) => itemMonth(primaryDate(item)) === filters.month;
   const shiftHours = state.shifts.filter(inMonth).reduce((sum, shift) => sum + hoursBetween(shift.start, shift.end), 0);
   const otHours = state.overtime.filter(inMonth).reduce((sum, ot) => sum + hoursBetween(ot.start, ot.end), 0);
@@ -247,11 +264,12 @@ function renderSummary(filters) {
 }
 
 function renderUpcoming() {
+  normalizeShiftRecords();
   const start = new Date(isoToday);
   const end = new Date(addDays(isoToday, 7));
   const items = [
-    ...state.shifts.map((item) => ({ date: item.date, text: `${item.officer} shift ${item.start}-${item.end}` })),
-    ...state.overtime.map((item) => ({ date: item.date, text: `${item.officer} OT ${item.start}-${item.end}` })),
+    ...state.shifts.map((item) => ({ date: item.date, text: `${item.officer} ${item.shift} shift ${formatMilitaryTime(item.start)}-${formatMilitaryTime(item.end)}` })),
+    ...state.overtime.map((item) => ({ date: item.date, text: `${item.officer} OT ${formatMilitaryTime(item.start)}-${formatMilitaryTime(item.end)}` })),
     ...state.court.map((item) => ({ date: item.date, text: `${item.officer} court ${item.time} case ${item.caseNumber}` })),
     ...state.swaps.map((item) => ({ date: item.giveDate, text: `${item.requester} swap with ${item.covering}` }))
   ].filter((item) => {
@@ -301,6 +319,29 @@ function itemMonth(value) {
   return String(value || "").slice(0, 7);
 }
 
+function applyShiftHours(form) {
+  const shift = form.elements.shift.value || "A";
+  const definition = SHIFT_DEFINITIONS[shift] || SHIFT_DEFINITIONS.A;
+  form.elements.start.value = definition.start;
+  form.elements.end.value = definition.end;
+}
+
+function normalizeShiftRecords() {
+  state.shifts.forEach((shift) => {
+    shift.shift = shift.shift || inferShiftName(shift.start, shift.end);
+    const definition = SHIFT_DEFINITIONS[shift.shift] || SHIFT_DEFINITIONS.A;
+    shift.start = definition.start;
+    shift.end = definition.end;
+  });
+}
+
+function inferShiftName(start, end) {
+  const startTime = String(start || "");
+  const endTime = String(end || "");
+  if (startTime === "18:00" || endTime === "06:00") return "B";
+  return "A";
+}
+
 function hoursBetween(start, end) {
   if (!start || !end) return 0;
   const [startHours, startMinutes] = start.split(":").map(Number);
@@ -309,6 +350,10 @@ function hoursBetween(start, end) {
   let endTotal = endHours * 60 + endMinutes;
   if (endTotal < startTotal) endTotal += 24 * 60;
   return (endTotal - startTotal) / 60;
+}
+
+function formatMilitaryTime(value) {
+  return String(value || "").replace(":", "");
 }
 
 function formatHours(value) {
