@@ -228,12 +228,48 @@ async function deleteRecord(collection, id) {
   render();
 }
 
+async function acceptSwap(id) {
+  if (!currentProfile) {
+    setStatus("Sign in as an officer to accept an open swap request.");
+    return;
+  }
+  const swap = state.swaps.find((item) => item.id === id);
+  if (!swap) return;
+  if (!canAcceptSwap(swap)) {
+    setStatus("This swap is not available for this officer to accept.");
+    return;
+  }
+
+  const updated = {
+    ...swap,
+    acceptingOfficer: currentProfile.display_name,
+    acceptingOfficerId: currentProfile.id,
+    requesterApproval: swap.requesterApproval || "Pending",
+    requesterSupervisorApproval: swap.requesterSupervisorApproval || "Pending",
+    acceptingSupervisorApproval: "Pending"
+  };
+  updated.status = deriveSwapStatus(updated);
+
+  if (isRemoteMode()) {
+    setStatus("Accepting shift swap...");
+    const saved = await saveSupabaseSwap(updated);
+    if (!saved) return;
+    await loadSupabaseState("Shift swap accepted. Supervisor approvals are now pending.");
+    return;
+  }
+
+  state.swaps = state.swaps.map((item) => (item.id === id ? updated : item));
+  populateUnitFilter();
+  persist();
+  render();
+}
+
 function render() {
   const filters = getFilters();
   normalizeShiftRecords();
   normalizeSwapRecords();
   const court = filterRecords(state.court.filter((record) => isUnitRecord(record, filters.unit)), filters, ["date", "caseNumber", "court", "status", "notes"]);
-  const swaps = filterRecords(state.swaps.filter((record) => isUnitSwap(record, filters.unit)), filters, ["giveDate", "takeDate", "requester", "acceptingOfficer", "giveShift", "takeShift", "status", "notes"]);
+  const swaps = filterRecords(state.swaps.filter((record) => isVisibleSwap(record, filters.unit)), filters, ["giveDate", "takeDate", "requester", "acceptingOfficer", "giveShift", "takeShift", "status", "notes"]);
 
   renderRows(els.courtRows, court, (item) => [
     formatDate(item.date),
@@ -254,7 +290,7 @@ function render() {
     item.takeDate ? `${formatDate(item.takeDate)} ${item.takeShift}` : "-",
     approvalSummary(item),
     statusPill(item.status),
-    rowActions("swaps", item.id)
+    rowActions("swaps", item.id, item)
   ], 8);
   renderSwapCards(swaps);
 
@@ -299,7 +335,7 @@ function renderSwapCards(swaps) {
     details.textContent = `Give: ${item.giveShift || "-"} | Take: ${item.takeDate ? `${formatDate(item.takeDate)} ${item.takeShift || ""}` : "-"}`;
     const approvals = document.createElement("p");
     approvals.textContent = approvalSummary(item);
-    card.append(title, officers, details, approvals, rowActions("swaps", item.id));
+    card.append(title, officers, details, approvals, rowActions("swaps", item.id, item));
     els.swapCards.appendChild(card);
   });
 }
@@ -339,9 +375,17 @@ function renderRows(target, rows, mapRow, colSpan = 7) {
   });
 }
 
-function rowActions(collection, id) {
+function rowActions(collection, id, item = null) {
   const wrapper = document.createElement("div");
   wrapper.className = "row-actions";
+  if (collection === "swaps" && canAcceptSwap(item)) {
+    const accept = document.createElement("button");
+    accept.type = "button";
+    accept.className = "primary compact";
+    accept.textContent = "Accept";
+    accept.addEventListener("click", () => acceptSwap(id));
+    wrapper.appendChild(accept);
+  }
   const edit = document.createElement("button");
   edit.type = "button";
   edit.className = "ghost";
@@ -378,7 +422,7 @@ function renderSummary(filters) {
   const courtInMonth = state.court.filter((item) => inMonth(item) && isUnitRecord(item, filters.unit));
   const courtHours = courtInMonth.reduce((sum, court) => sum + Number(court.duration || 0), 0);
   const courtCount = courtInMonth.length;
-  const swapCount = state.swaps.filter((swap) => itemMonth(swap.giveDate) === filters.month && isActiveSwap(swap) && isUnitSwap(swap, filters.unit)).length;
+  const swapCount = state.swaps.filter((swap) => itemMonth(swap.giveDate) === filters.month && isActiveSwap(swap) && isVisibleSwap(swap, filters.unit)).length;
 
   els.courtHours.textContent = formatHours(courtHours);
   els.courtCount.textContent = courtCount;
@@ -408,6 +452,14 @@ function renderActiveSwapRequests() {
     const meta = document.createElement("span");
     meta.textContent = "Open for any officer to accept";
     li.append(requester, request, meta);
+    if (canAcceptSwap(item)) {
+      const accept = document.createElement("button");
+      accept.type = "button";
+      accept.className = "ghost compact";
+      accept.textContent = "Accept";
+      accept.addEventListener("click", () => acceptSwap(item.id));
+      li.appendChild(accept);
+    }
     els.activeSwapList.appendChild(li);
   });
 }
@@ -479,6 +531,11 @@ function isUnitSwap(record, unit) {
   return !unit || record.requester === unit || record.acceptingOfficer === unit;
 }
 
+function isVisibleSwap(record, unit) {
+  if (isUnitSwap(record, unit)) return true;
+  return isRemoteMode() && currentProfile?.role === "officer" && isOpenSwap(record) && record.requester !== currentProfile.display_name;
+}
+
 function normalizeSwapRecords() {
   state.swaps.forEach((swap) => {
     if (!swap.acceptingOfficer && swap.covering) swap.acceptingOfficer = swap.covering;
@@ -516,6 +573,16 @@ function isOpenSwap(swap) {
 
 function isActiveSwap(swap) {
   return ["Open", "Awaiting Approvals"].includes(deriveSwapStatus(swap));
+}
+
+function canAcceptSwap(swap) {
+  return Boolean(
+    swap
+    && currentProfile
+    && currentProfile.role === "officer"
+    && isOpenSwap(swap)
+    && swap.requester !== currentProfile.display_name
+  );
 }
 
 function primaryDate(record) {

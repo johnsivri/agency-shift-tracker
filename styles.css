@@ -123,6 +123,12 @@ h2 {
   background: transparent;
 }
 
+.compact {
+  min-height: 32px;
+  min-width: 0;
+  padding: 0 10px;
+}
+
 .app-shell {
   display: grid;
   grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
@@ -272,6 +278,10 @@ button:focus-visible {
 .active-swaps span {
   display: block;
   margin-top: 3px;
+}
+
+.active-swaps button {
+  margin-top: 8px;
 }
 
 .workspace {
