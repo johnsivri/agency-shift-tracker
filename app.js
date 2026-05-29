@@ -285,7 +285,7 @@ function render() {
   normalizeShiftRecords();
   normalizeSwapRecords();
   const court = filterRecords(state.court.filter((record) => isUnitRecord(record, filters.unit)), filters, ["date", "caseNumber", "court", "status", "notes"]);
-  const swaps = filterRecords(state.swaps.filter((record) => isVisibleSwap(record, filters.unit)), filters, ["giveDate", "takeDate", "requester", "acceptingOfficer", "giveShift", "takeShift", "status", "notes"]);
+  const swaps = filterSwapRecords(state.swaps.filter((record) => isVisibleSwap(record, filters.unit)), filters);
 
   renderRows(els.courtRows, court, (item) => [
     formatDate(item.date),
@@ -438,7 +438,10 @@ function renderSummary(filters) {
   const courtInMonth = state.court.filter((item) => inMonth(item) && isUnitRecord(item, filters.unit));
   const courtHours = courtInMonth.reduce((sum, court) => sum + Number(court.duration || 0), 0);
   const courtCount = courtInMonth.length;
-  const swapCount = state.swaps.filter((swap) => itemMonth(swap.giveDate) === filters.month && isActiveSwap(swap) && isVisibleSwap(swap, filters.unit)).length;
+  const swapCount = filterSwapRecords(
+    state.swaps.filter((swap) => isActiveSwap(swap) && isVisibleSwap(swap, filters.unit)),
+    filters
+  ).length;
 
   els.courtHours.textContent = formatHours(courtHours);
   els.courtCount.textContent = courtCount;
@@ -485,6 +488,19 @@ function filterRecords(records, filters, fields) {
     const monthMatch = itemMonth(primaryDate(record)) === filters.month;
     const textMatch = !filters.search || fields.some((field) => String(record[field] || "").toLowerCase().includes(filters.search));
     return monthMatch && textMatch;
+  });
+}
+
+function filterSwapRecords(records, filters) {
+  const searchableFields = ["giveDate", "takeDate", "requester", "acceptingOfficer", "giveShift", "takeShift", "status", "notes"];
+  return records.filter((record) => {
+    const monthMatch = itemMonth(primaryDate(record)) === filters.month;
+    const openForOtherOfficer = isRemoteMode()
+      && currentProfile?.role === "officer"
+      && isOpenSwap(record)
+      && record.requester !== currentProfile.display_name;
+    const textMatch = !filters.search || searchableFields.some((field) => String(record[field] || "").toLowerCase().includes(filters.search));
+    return (monthMatch || openForOtherOfficer) && textMatch;
   });
 }
 
