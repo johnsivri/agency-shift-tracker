@@ -40,6 +40,10 @@
             <span class="label">OT hours</span>
           </div>
           <div>
+            <span class="metric" id="courtHours">0</span>
+            <span class="label">Court hours</span>
+          </div>
+          <div>
             <span class="metric" id="courtCount">0</span>
             <span class="label">Court events</span>
           </div>
@@ -94,7 +98,7 @@
           <div class="panel-heading">
             <div>
               <h2>Overtime</h2>
-              <p>Log reasons, approval state, and court-related overtime.</p>
+              <p>Log overtime separately from traffic court appearance hours.</p>
             </div>
           </div>
           <form id="overtimeForm" class="entry-form">
@@ -121,7 +125,7 @@
           <div class="panel-heading">
             <div>
               <h2>Court Appearances</h2>
-              <p>Track subpoenas, appearance status, case numbers, and duration.</p>
+              <p>Track Tuesday 1330 and Thursday 0900 traffic court appearances.</p>
             </div>
           </div>
           <form id="courtForm" class="entry-form">
@@ -130,8 +134,8 @@
             <label class="field"><span>Officer</span><input name="officer" required placeholder="Name" /></label>
             <label class="field"><span>Case No.</span><input name="caseNumber" required placeholder="Case" /></label>
             <label class="field"><span>Court</span><input name="court" placeholder="Court / room" /></label>
-            <label class="field"><span>Time</span><input type="time" name="time" required /></label>
-            <label class="field"><span>Duration</span><input type="number" step="0.25" min="0" name="duration" placeholder="Hours" /></label>
+            <label class="field"><span>Time</span><input type="time" name="time" required readonly /></label>
+            <label class="field"><span>Court Hours</span><input type="number" step="0.25" min="0" name="duration" placeholder="Hours earned" /></label>
             <label class="field"><span>Status</span><select name="status"><option>Scheduled</option><option>Appeared</option><option>Continued</option><option>Canceled</option></select></label>
             <label class="check-field"><input type="checkbox" name="subpoena" /> Subpoena received</label>
             <label class="field wide"><span>Notes</span><input name="notes" placeholder="Optional notes" /></label>

@@ -9,6 +9,8 @@ A small browser-based tracker for agency shift operations.
 - A and B shifts run 0600-1800
 - C and D shifts run 1800-0600
 - Overtime tracking with approval status and court-related flags
+- Traffic court schedule rules for Tuesdays at 1330 and Thursdays at 0900
+- Traffic court hours are tracked separately from overtime hours
 - Court appearance tracking with case numbers, subpoena status, duration, and notes
 - Shift swap tracking with requester, covering officer, dates, status, and notes
 - Month and search filters

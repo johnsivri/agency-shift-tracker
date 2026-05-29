@@ -10,6 +10,11 @@ const SHIFT_DEFINITIONS = {
   C: { start: "18:00", end: "06:00", label: "C" },
   D: { start: "18:00", end: "06:00", label: "D" }
 };
+const COURT_SCHEDULE = {
+  2: "13:30",
+  4: "09:00"
+};
+const nextCourtDate = findNextCourtDate(isoToday);
 
 const seedData = {
   shifts: [
@@ -21,7 +26,7 @@ const seedData = {
     { id: uid(), date: tomorrow, officer: "Dana Price", start: "09:00", end: "11:00", reason: "Court", approval: "Approved", caseNumber: "26-1842", courtRelated: true }
   ],
   court: [
-    { id: uid(), date: tomorrow, officer: "Dana Price", caseNumber: "26-1842", court: "District 4", time: "09:00", duration: "2", status: "Scheduled", subpoena: true, notes: "Bring body cam notes" }
+    { id: uid(), date: nextCourtDate, officer: "Dana Price", caseNumber: "26-1842", court: "District 4", time: courtTimeForDate(nextCourtDate), duration: "2", status: "Scheduled", subpoena: true, notes: "Bring body cam notes" }
   ],
   swaps: [
     { id: uid(), requester: "M. Alvarez", covering: "Jordan Lee", giveDate: nextWeek, giveShift: "1500-2300", takeDate: "", takeShift: "", status: "Pending", notes: "Awaiting supervisor approval" }
@@ -39,6 +44,7 @@ const els = {
   swapRows: document.querySelector("#swapRows"),
   shiftHours: document.querySelector("#shiftHours"),
   overtimeHours: document.querySelector("#overtimeHours"),
+  courtHours: document.querySelector("#courtHours"),
   courtCount: document.querySelector("#courtCount"),
   swapCount: document.querySelector("#swapCount"),
   upcomingList: document.querySelector("#upcomingList")
@@ -65,8 +71,13 @@ document.querySelector("#overtimeForm").addEventListener("submit", (event) => {
   saveForm("overtime", event.currentTarget, ["date", "officer", "start", "end", "reason", "approval", "caseNumber", "courtRelated"]);
 });
 
+document.querySelector("#courtForm").elements.date.addEventListener("input", (event) => {
+  applyCourtTime(event.currentTarget.form);
+});
+
 document.querySelector("#courtForm").addEventListener("submit", (event) => {
   event.preventDefault();
+  if (!applyCourtTime(event.currentTarget)) return;
   saveForm("court", event.currentTarget, ["date", "officer", "caseNumber", "court", "time", "duration", "status", "subpoena", "notes"]);
 });
 
@@ -88,6 +99,7 @@ document.querySelector("#resetDemo").addEventListener("click", () => {
 
 render();
 applyShiftHours(document.querySelector("#shiftForm"));
+applyCourtTime(document.querySelector("#courtForm"));
 
 function activateTab(name) {
   document.querySelectorAll(".tab").forEach((tab) => tab.classList.toggle("is-active", tab.dataset.tab === name));
@@ -115,6 +127,7 @@ function saveForm(collection, form, fields) {
   form.reset();
   form.elements.id.value = "";
   if (collection === "shifts") applyShiftHours(form);
+  if (collection === "court") applyCourtTime(form);
   persist();
   render();
 }
@@ -133,6 +146,7 @@ function editRecord(collection, id) {
     }
   });
   if (collection === "shifts") applyShiftHours(form);
+  if (collection === "court") applyCourtTime(form);
   form.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
@@ -254,11 +268,14 @@ function renderSummary(filters) {
   const inMonth = (item) => itemMonth(primaryDate(item)) === filters.month;
   const shiftHours = state.shifts.filter(inMonth).reduce((sum, shift) => sum + hoursBetween(shift.start, shift.end), 0);
   const otHours = state.overtime.filter(inMonth).reduce((sum, ot) => sum + hoursBetween(ot.start, ot.end), 0);
-  const courtCount = state.court.filter(inMonth).length;
+  const courtInMonth = state.court.filter(inMonth);
+  const courtHours = courtInMonth.reduce((sum, court) => sum + Number(court.duration || 0), 0);
+  const courtCount = courtInMonth.length;
   const swapCount = state.swaps.filter((swap) => itemMonth(swap.giveDate) === filters.month && swap.status === "Pending").length;
 
   els.shiftHours.textContent = formatHours(shiftHours);
   els.overtimeHours.textContent = formatHours(otHours);
+  els.courtHours.textContent = formatHours(courtHours);
   els.courtCount.textContent = courtCount;
   els.swapCount.textContent = swapCount;
 }
@@ -340,6 +357,34 @@ function inferShiftName(start, end) {
   const endTime = String(end || "");
   if (startTime === "18:00" || endTime === "06:00") return "B";
   return "A";
+}
+
+function applyCourtTime(form) {
+  const date = form.elements.date.value;
+  const time = courtTimeForDate(date);
+  form.elements.time.value = time || "";
+  form.elements.date.setCustomValidity(time ? "" : "Traffic court dates must be Tuesdays at 1330 or Thursdays at 0900.");
+  if (!time && date) {
+    form.reportValidity();
+    return false;
+  }
+  return true;
+}
+
+function courtTimeForDate(value) {
+  if (!value) return "";
+  const date = new Date(`${value}T00:00:00`);
+  return COURT_SCHEDULE[date.getDay()] || "";
+}
+
+function findNextCourtDate(value) {
+  let date = new Date(`${value}T00:00:00`);
+  for (let i = 0; i < 7; i += 1) {
+    const candidate = toDateInput(date);
+    if (courtTimeForDate(candidate)) return candidate;
+    date.setDate(date.getDate() + 1);
+  }
+  return value;
 }
 
 function hoursBetween(start, end) {
