@@ -1,4 +1,4 @@
-const STORAGE_KEY = "agency-shift-tracker-v1";
+const STORAGE_KEY = "agency-shift-tracker-v2";
 
 const today = new Date();
 const isoToday = toDateInput(today);
@@ -17,15 +17,33 @@ const COURT_SCHEDULE = {
 const nextCourtDate = findNextCourtDate(isoToday);
 
 const seedData = {
+  roster: [
+    { id: uid(), name: "Sgt. Elena Rivera", badgeNumber: "S-104", role: "supervisor", shift: "A", supervisor: "" },
+    { id: uid(), name: "Sgt. Marcus Chen", badgeNumber: "S-118", role: "supervisor", shift: "C", supervisor: "" },
+    { id: uid(), name: "Officer Jordan Lee", badgeNumber: "P-221", role: "officer", shift: "A", supervisor: "Sgt. Elena Rivera" },
+    { id: uid(), name: "Officer Maya Alvarez", badgeNumber: "P-237", role: "officer", shift: "B", supervisor: "Sgt. Elena Rivera" },
+    { id: uid(), name: "Officer Dana Price", badgeNumber: "P-244", role: "officer", shift: "C", supervisor: "Sgt. Marcus Chen" },
+    { id: uid(), name: "Officer Sam Patel", badgeNumber: "P-258", role: "officer", shift: "D", supervisor: "Sgt. Marcus Chen" },
+    { id: uid(), name: "Officer Chris Morgan", badgeNumber: "P-263", role: "officer", shift: "A", supervisor: "Sgt. Elena Rivera" },
+    { id: uid(), name: "Officer Taylor Brooks", badgeNumber: "P-279", role: "officer", shift: "C", supervisor: "Sgt. Marcus Chen" }
+  ],
   shifts: [
-    { id: uid(), date: isoToday, officer: "Jordan Lee", agency: "North Precinct", shift: "A", start: "06:00", end: "18:00", status: "Worked", notes: "Zone 2" },
-    { id: uid(), date: tomorrow, officer: "M. Alvarez", agency: "Court Services", shift: "B", start: "06:00", end: "18:00", status: "Scheduled", notes: "" }
+    { id: uid(), date: isoToday, officer: "Officer Jordan Lee", agency: "Patrol", shift: "A", start: "06:00", end: "18:00", status: "Worked", notes: "Supervisor: Sgt. Elena Rivera" },
+    { id: uid(), date: isoToday, officer: "Officer Maya Alvarez", agency: "Patrol", shift: "B", start: "06:00", end: "18:00", status: "Worked", notes: "Supervisor: Sgt. Elena Rivera" },
+    { id: uid(), date: isoToday, officer: "Officer Dana Price", agency: "Patrol", shift: "C", start: "18:00", end: "06:00", status: "Scheduled", notes: "Supervisor: Sgt. Marcus Chen" },
+    { id: uid(), date: isoToday, officer: "Officer Sam Patel", agency: "Patrol", shift: "D", start: "18:00", end: "06:00", status: "Scheduled", notes: "Supervisor: Sgt. Marcus Chen" },
+    { id: uid(), date: tomorrow, officer: "Officer Chris Morgan", agency: "Patrol", shift: "A", start: "06:00", end: "18:00", status: "Scheduled", notes: "Supervisor: Sgt. Elena Rivera" },
+    { id: uid(), date: tomorrow, officer: "Officer Taylor Brooks", agency: "Patrol", shift: "C", start: "18:00", end: "06:00", status: "Scheduled", notes: "Supervisor: Sgt. Marcus Chen" }
   ],
   court: [
-    { id: uid(), date: nextCourtDate, officer: "Dana Price", caseNumber: "26-1842", court: "District 4", time: courtTimeForDate(nextCourtDate), duration: "2", status: "Scheduled", subpoena: true, notes: "Bring body cam notes" }
+    { id: uid(), date: nextCourtDate, officer: "Officer Dana Price", caseNumber: "26-1842", court: "Traffic Court", time: courtTimeForDate(nextCourtDate), duration: "2", status: "Scheduled", subpoena: true, notes: "Citation: T-26-1842; complainant: Alex Reed; attorney: yes" },
+    { id: uid(), date: nextCourtDate, officer: "Officer Jordan Lee", caseNumber: "26-1904", court: "Traffic Court", time: courtTimeForDate(nextCourtDate), duration: "2", status: "Scheduled", subpoena: true, notes: "Citation: T-26-1904; complainant: Morgan Gray; attorney: no" },
+    { id: uid(), date: addDays(nextCourtDate, 2), officer: "Officer Taylor Brooks", caseNumber: "26-1931", court: "Traffic Court", time: courtTimeForDate(addDays(nextCourtDate, 2)), duration: "1.5", status: "Scheduled", subpoena: true, notes: "Citation: T-26-1931; complainant: Jamie Fox; attorney: yes" }
   ],
   swaps: [
-    { id: uid(), requester: "M. Alvarez", acceptingOfficer: "", giveDate: nextWeek, giveShift: "0600-1800", takeDate: "", takeShift: "", requesterApproval: "Pending", requesterSupervisorApproval: "Pending", acceptingSupervisorApproval: "Pending", status: "Open", notes: "Open for acceptance" }
+    { id: uid(), requester: "Officer Maya Alvarez", acceptingOfficer: "", giveDate: nextWeek, giveShift: "B shift 0600-1800", takeDate: "", takeShift: "", requesterApproval: "Pending", requesterSupervisorApproval: "Pending", acceptingSupervisorApproval: "Pending", status: "Open", notes: "Requester supervisor: Sgt. Elena Rivera" },
+    { id: uid(), requester: "Officer Sam Patel", acceptingOfficer: "Officer Chris Morgan", giveDate: addDays(isoToday, 8), giveShift: "D shift 1800-0600", takeDate: addDays(isoToday, 10), takeShift: "A shift 0600-1800", requesterApproval: "Approved", requesterSupervisorApproval: "Pending", acceptingSupervisorApproval: "Pending", status: "Awaiting Approvals", notes: "Requester supervisor: Sgt. Marcus Chen; accepting supervisor: Sgt. Elena Rivera" },
+    { id: uid(), requester: "Officer Jordan Lee", acceptingOfficer: "Officer Dana Price", giveDate: addDays(isoToday, 12), giveShift: "A shift 0600-1800", takeDate: addDays(isoToday, 14), takeShift: "C shift 1800-0600", requesterApproval: "Approved", requesterSupervisorApproval: "Approved", acceptingSupervisorApproval: "Approved", status: "Approved", notes: "Fully approved demo swap" }
   ]
 };
 
@@ -384,6 +402,11 @@ function populateUnitFilter() {
 
 function getUnitNames() {
   const names = new Set();
+  if (Array.isArray(state.roster)) {
+    state.roster.forEach((record) => {
+      if (record.role === "officer" && record.name) names.add(record.name);
+    });
+  }
   state.shifts.forEach((record) => record.officer && names.add(record.officer));
   state.court.forEach((record) => record.officer && names.add(record.officer));
   state.swaps.forEach((record) => {
@@ -539,6 +562,7 @@ function persist() {
 
 function exportCsv() {
   const sections = [
+    ["roster", state.roster || []],
     ["shifts", state.shifts],
     ["court", state.court],
     ["swaps", state.swaps]
