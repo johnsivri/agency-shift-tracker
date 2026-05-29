@@ -211,6 +211,10 @@ function editRecord(collection, id) {
   const record = state[collection].find((item) => item.id === id);
   const form = document.querySelector(`#${collection === "shifts" ? "shift" : collection === "swaps" ? "swap" : collection}Form`);
   if (!record || !form) return;
+  if (!canEditRecord(collection, record)) {
+    setStatus("You do not have permission to edit this record.");
+    return;
+  }
 
   Object.entries(record).forEach(([key, value]) => {
     if (!form.elements[key]) return;
@@ -227,6 +231,11 @@ function editRecord(collection, id) {
 async function deleteRecord(collection, id) {
   if (!canViewData()) {
     setStatus("Sign in before deleting records.");
+    return;
+  }
+  const record = state[collection].find((item) => item.id === id);
+  if (!record || !canDeleteRecord(collection, record)) {
+    setStatus("You do not have permission to delete this record.");
     return;
   }
   if (isRemoteMode()) {
@@ -338,7 +347,7 @@ function render() {
     item.court || "-",
     statusPill(item.status),
     item.duration ? `${Number(item.duration).toFixed(2)}h` : "-",
-    rowActions("court", item.id)
+    rowActions("court", item.id, item)
   ], 7);
   renderCourtCards(court);
 
@@ -373,7 +382,7 @@ function renderCourtCards(court) {
     details.textContent = `${item.officer} - ${item.court || "Court"} - ${item.status}`;
     const hours = document.createElement("p");
     hours.textContent = `Court hours: ${item.duration ? `${Number(item.duration).toFixed(2)}h` : "-"}`;
-    card.append(title, details, hours, rowActions("court", item.id));
+    card.append(title, details, hours, rowActions("court", item.id, item));
     els.courtCards.appendChild(card);
   });
 }
@@ -474,17 +483,22 @@ function rowActions(collection, id, item = null) {
       wrapper.append(approve, deny);
     });
   }
-  const edit = document.createElement("button");
-  edit.type = "button";
-  edit.className = "ghost";
-  edit.textContent = "Edit";
-  edit.addEventListener("click", () => editRecord(collection, id));
-  const remove = document.createElement("button");
-  remove.type = "button";
-  remove.className = "ghost";
-  remove.textContent = "Delete";
-  remove.addEventListener("click", () => deleteRecord(collection, id));
-  wrapper.append(edit, remove);
+  if (canEditRecord(collection, item)) {
+    const edit = document.createElement("button");
+    edit.type = "button";
+    edit.className = "ghost";
+    edit.textContent = "Edit";
+    edit.addEventListener("click", () => editRecord(collection, id));
+    wrapper.appendChild(edit);
+  }
+  if (canDeleteRecord(collection, item)) {
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "ghost";
+    remove.textContent = "Delete";
+    remove.addEventListener("click", () => deleteRecord(collection, id));
+    wrapper.appendChild(remove);
+  }
   return wrapper;
 }
 
@@ -736,6 +750,35 @@ function canRequesterDecideSwap(swap) {
     && swap.takeShift
     && swap.requesterApproval === "Pending"
   );
+}
+
+function canEditRecord(collection, record) {
+  if (!record || !currentProfile) return false;
+  if (currentProfile.role === "admin") return true;
+  if (collection === "court") {
+    return record.officer === currentProfile.display_name || isSupervisorForName(record.officer);
+  }
+  if (collection === "swaps") {
+    if (record.requester === currentProfile.display_name) {
+      return !record.acceptingOfficer && record.requesterApproval === "Pending";
+    }
+    if (record.acceptingOfficer === currentProfile.display_name) {
+      return record.requesterApproval === "Pending" && record.requesterSupervisorApproval === "Pending" && record.acceptingSupervisorApproval === "Pending";
+    }
+  }
+  return false;
+}
+
+function canDeleteRecord(collection, record) {
+  if (!record || !currentProfile) return false;
+  if (currentProfile.role === "admin") return true;
+  if (collection === "court") {
+    return record.officer === currentProfile.display_name || isSupervisorForName(record.officer);
+  }
+  if (collection === "swaps") {
+    return record.requester === currentProfile.display_name && !record.acceptingOfficer;
+  }
+  return false;
 }
 
 function supervisorDecisionActions(swap) {
