@@ -294,6 +294,32 @@ async function decideRequesterApproval(id, decision) {
   render();
 }
 
+async function decideSupervisorApproval(id, approvalKey, decision) {
+  const swap = state.swaps.find((item) => item.id === id);
+  if (!swap || !canSupervisorDecideSwap(swap, approvalKey)) {
+    setStatus("Only the assigned supervisor can approve or deny this swap.");
+    return;
+  }
+  const updated = {
+    ...swap,
+    [approvalKey]: decision
+  };
+  updated.status = deriveSwapStatus(updated);
+
+  if (isRemoteMode()) {
+    setStatus(`${decision} supervisor decision...`);
+    const saved = await saveSupabaseSwap(updated);
+    if (!saved) return;
+    await loadSupabaseState(`Supervisor decision ${decision.toLowerCase()}.`);
+    return;
+  }
+
+  state.swaps = state.swaps.map((item) => (item.id === id ? updated : item));
+  populateUnitFilter();
+  persist();
+  render();
+}
+
 function render() {
   if (!canViewData()) {
     renderLockedState();
@@ -432,6 +458,21 @@ function rowActions(collection, id, item = null) {
     deny.textContent = "Deny";
     deny.addEventListener("click", () => decideRequesterApproval(id, "Denied"));
     wrapper.append(approve, deny);
+  }
+  if (collection === "swaps") {
+    supervisorDecisionActions(item).forEach(({ label, approvalKey }) => {
+      const approve = document.createElement("button");
+      approve.type = "button";
+      approve.className = "primary compact";
+      approve.textContent = `${label} Approve`;
+      approve.addEventListener("click", () => decideSupervisorApproval(id, approvalKey, "Approved"));
+      const deny = document.createElement("button");
+      deny.type = "button";
+      deny.className = "ghost compact";
+      deny.textContent = `${label} Deny`;
+      deny.addEventListener("click", () => decideSupervisorApproval(id, approvalKey, "Denied"));
+      wrapper.append(approve, deny);
+    });
   }
   const edit = document.createElement("button");
   edit.type = "button";
@@ -695,6 +736,33 @@ function canRequesterDecideSwap(swap) {
     && swap.takeShift
     && swap.requesterApproval === "Pending"
   );
+}
+
+function supervisorDecisionActions(swap) {
+  const actions = [];
+  if (canSupervisorDecideSwap(swap, "requesterSupervisorApproval")) {
+    actions.push({ label: "Req Sup", approvalKey: "requesterSupervisorApproval" });
+  }
+  if (canSupervisorDecideSwap(swap, "acceptingSupervisorApproval")) {
+    actions.push({ label: "Acc Sup", approvalKey: "acceptingSupervisorApproval" });
+  }
+  return actions;
+}
+
+function canSupervisorDecideSwap(swap, approvalKey) {
+  if (!swap || !currentProfile || !["supervisor", "admin"].includes(currentProfile.role)) return false;
+  if (!swap.acceptingOfficer || !swap.takeDate || !swap.takeShift) return false;
+  if (swap.requesterApproval !== "Approved") return false;
+  if (swap[approvalKey] !== "Pending") return false;
+  if (currentProfile.role === "admin") return true;
+  if (approvalKey === "requesterSupervisorApproval") return isSupervisorForName(swap.requester);
+  if (approvalKey === "acceptingSupervisorApproval") return isSupervisorForName(swap.acceptingOfficer);
+  return false;
+}
+
+function isSupervisorForName(officerName) {
+  const officer = state.roster.find((profile) => profile.name === officerName);
+  return Boolean(officer && officer.supervisor === currentProfile?.display_name);
 }
 
 function primaryDate(record) {
