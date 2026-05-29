@@ -52,6 +52,7 @@ let authUser = null;
 let currentProfile = null;
 let supabaseClient = createSupabaseClient();
 let isLoadingRemote = false;
+let activeLoadId = 0;
 
 const els = {
   authForm: document.querySelector("#authForm"),
@@ -131,7 +132,7 @@ async function initializeApp() {
     supabaseClient.auth.onAuthStateChange(async (_event, session) => {
       authUser = session?.user || null;
       if (authUser) {
-        await loadSupabaseState();
+        await loadSupabaseState("Session refreshed.");
       } else {
         currentProfile = null;
         state = loadState();
@@ -143,7 +144,7 @@ async function initializeApp() {
   }
 
   if (authUser) {
-    await loadSupabaseState();
+    await loadSupabaseState("Signed in.");
   } else {
     updateAuthState();
     render();
@@ -168,9 +169,10 @@ async function saveForm(collection, form, fields) {
   if (collection === "swaps") item.status = deriveSwapStatus(item);
 
   if (isRemoteMode()) {
+    setStatus("Saving shared data...");
     const saved = collection === "court" ? await saveSupabaseCourt(item) : await saveSupabaseSwap(item);
     if (!saved) return;
-    await loadSupabaseState();
+    await loadSupabaseState(collection === "court" ? "Court record saved." : "Shift swap saved.");
   } else {
     const index = state[collection].findIndex((record) => record.id === item.id);
     if (index >= 0) {
@@ -209,12 +211,14 @@ function editRecord(collection, id) {
 async function deleteRecord(collection, id) {
   if (isRemoteMode()) {
     const table = collection === "court" ? "traffic_court_events" : "shift_swap_requests";
-    const { error } = await supabaseClient.from(table).delete().eq("id", id);
-    if (error) {
+    try {
+      const { error } = await withSupabaseTimeout(supabaseClient.from(table).delete().eq("id", id), `${table} delete`);
+      if (error) throw error;
+    } catch (error) {
       setStatus(`Delete failed: ${error.message}`);
       return;
     }
-    await loadSupabaseState();
+    await loadSupabaseState("Record deleted.");
     return;
   }
 
@@ -656,7 +660,7 @@ async function signIn(email, password) {
     return;
   }
   authUser = data.user;
-  await loadSupabaseState();
+  await loadSupabaseState("Signed in.");
 }
 
 async function signOut() {
@@ -695,8 +699,10 @@ function isRemoteMode() {
   return Boolean(supabaseClient && authUser && currentProfile);
 }
 
-async function loadSupabaseState() {
+async function loadSupabaseState(successMessage = "Shared Supabase data loaded.") {
   if (!supabaseClient || !authUser) return;
+  const loadId = activeLoadId + 1;
+  activeLoadId = loadId;
   isLoadingRemote = true;
   updateAuthState();
 
@@ -727,28 +733,37 @@ async function loadSupabaseState() {
     };
     populateUnitFilter();
     render();
+    if (loadId === activeLoadId) setStatus(successMessage);
   } catch (error) {
-    setStatus(`Supabase load failed: ${error.message}`);
+    if (loadId === activeLoadId) setStatus(`Supabase load failed: ${error.message}`);
   } finally {
-    isLoadingRemote = false;
-    updateAuthState();
+    if (loadId === activeLoadId) {
+      isLoadingRemote = false;
+      if (els.authState.textContent === "Loading shared Supabase data...") updateAuthState();
+    }
   }
 }
 
 async function fetchSupabaseProfiles() {
-  const { data, error } = await supabaseClient
-    .from("profiles")
-    .select("id, display_name, badge_number, role, supervisor_id")
-    .order("display_name");
+  const { data, error } = await withSupabaseTimeout(
+    supabaseClient
+      .from("profiles")
+      .select("id, display_name, badge_number, role, supervisor_id")
+      .order("display_name"),
+    "profiles"
+  );
   if (error) throw error;
   return data || [];
 }
 
 async function fetchSupabaseShiftAssignments(profiles) {
-  const { data, error } = await supabaseClient
-    .from("shift_assignments")
-    .select("id, officer_id, shift, starts_at, ends_at, active")
-    .eq("active", true);
+  const { data, error } = await withSupabaseTimeout(
+    supabaseClient
+      .from("shift_assignments")
+      .select("id, officer_id, shift, starts_at, ends_at, active")
+      .eq("active", true),
+    "shift assignments"
+  );
   if (error) throw error;
   return (data || []).map((row) => ({
     id: row.id,
@@ -765,10 +780,13 @@ async function fetchSupabaseShiftAssignments(profiles) {
 }
 
 async function fetchSupabaseCourtEvents(profiles) {
-  const { data, error } = await supabaseClient
-    .from("traffic_court_events")
-    .select("id, officer_id, court_date, court_time, court_hours, citation_number, complainant, has_attorney, court_location, status, notes")
-    .order("court_date");
+  const { data, error } = await withSupabaseTimeout(
+    supabaseClient
+      .from("traffic_court_events")
+      .select("id, officer_id, court_date, court_time, court_hours, citation_number, complainant, has_attorney, court_location, status, notes")
+      .order("court_date"),
+    "traffic court events"
+  );
   if (error) throw error;
   return (data || []).map((row) => ({
     id: row.id,
@@ -786,10 +804,13 @@ async function fetchSupabaseCourtEvents(profiles) {
 }
 
 async function fetchSupabaseSwapRequests(profiles) {
-  const { data, error } = await supabaseClient
-    .from("shift_swap_requests")
-    .select("id, requesting_officer_id, accepting_officer_id, give_date, give_shift, take_date, take_shift, requesting_officer_approval, requester_supervisor_approval, accepting_supervisor_approval, status, notes")
-    .order("give_date");
+  const { data, error } = await withSupabaseTimeout(
+    supabaseClient
+      .from("shift_swap_requests")
+      .select("id, requesting_officer_id, accepting_officer_id, give_date, give_shift, take_date, take_shift, requesting_officer_approval, requester_supervisor_approval, accepting_supervisor_approval, status, notes")
+      .order("give_date"),
+    "shift swap requests"
+  );
   if (error) throw error;
   return (data || []).map((row) => ({
     id: row.id,
@@ -828,10 +849,12 @@ async function saveSupabaseCourt(item) {
   };
 
   const query = supabaseClient.from("traffic_court_events");
-  const { error } = item.id && isUuid(item.id)
-    ? await query.update(payload).eq("id", item.id)
-    : await query.insert(payload);
-  if (error) {
+  try {
+    const { error } = item.id && isUuid(item.id)
+      ? await withSupabaseTimeout(query.update(payload).eq("id", item.id), "court update")
+      : await withSupabaseTimeout(query.insert(payload), "court insert");
+    if (error) throw error;
+  } catch (error) {
     setStatus(`Court save failed: ${error.message}`);
     return false;
   }
@@ -856,10 +879,12 @@ async function saveSupabaseSwap(item) {
   };
 
   const query = supabaseClient.from("shift_swap_requests");
-  const { error } = item.id && isUuid(item.id)
-    ? await query.update(payload).eq("id", item.id)
-    : await query.insert(payload);
-  if (error) {
+  try {
+    const { error } = item.id && isUuid(item.id)
+      ? await withSupabaseTimeout(query.update(payload).eq("id", item.id), "swap update")
+      : await withSupabaseTimeout(query.insert(payload), "swap insert");
+    if (error) throw error;
+  } catch (error) {
     setStatus(`Swap save failed: ${error.message}`);
     return false;
   }
@@ -890,6 +915,15 @@ function trimTime(value) {
 
 function isUuid(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(value || ""));
+}
+
+function withSupabaseTimeout(query, label, timeoutMs = 12000) {
+  return Promise.race([
+    query,
+    new Promise((_, reject) => {
+      window.setTimeout(() => reject(new Error(`${label} request timed out`)), timeoutMs);
+    })
+  ]);
 }
 
 function applyCurrentProfileDefaults() {
