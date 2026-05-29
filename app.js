@@ -47,7 +47,7 @@ const els = {
   courtHours: document.querySelector("#courtHours"),
   courtCount: document.querySelector("#courtCount"),
   swapCount: document.querySelector("#swapCount"),
-  upcomingList: document.querySelector("#upcomingList")
+  activeSwapList: document.querySelector("#activeSwapList")
 };
 
 els.monthFilter.value = isoToday.slice(0, 7);
@@ -206,7 +206,7 @@ function render() {
   ]);
 
   renderSummary(filters);
-  renderUpcoming();
+  renderActiveSwapRequests();
 }
 
 function renderRows(target, rows, mapRow) {
@@ -280,32 +280,30 @@ function renderSummary(filters) {
   els.swapCount.textContent = swapCount;
 }
 
-function renderUpcoming() {
-  normalizeShiftRecords();
-  const start = new Date(isoToday);
-  const end = new Date(addDays(isoToday, 7));
-  const items = [
-    ...state.shifts.map((item) => ({ date: item.date, text: `${item.officer} ${item.shift} shift ${formatMilitaryTime(item.start)}-${formatMilitaryTime(item.end)}` })),
-    ...state.overtime.map((item) => ({ date: item.date, text: `${item.officer} OT ${formatMilitaryTime(item.start)}-${formatMilitaryTime(item.end)}` })),
-    ...state.court.map((item) => ({ date: item.date, text: `${item.officer} court ${item.time} case ${item.caseNumber}` })),
-    ...state.swaps.map((item) => ({ date: item.giveDate, text: `${item.requester} swap with ${item.covering}` }))
-  ].filter((item) => {
-    const date = new Date(item.date);
-    return date >= start && date <= end;
-  }).sort((a, b) => a.date.localeCompare(b.date));
+function renderActiveSwapRequests() {
+  const activeStatuses = new Set(["Pending", "Approved"]);
+  const items = state.swaps
+    .filter((swap) => activeStatuses.has(swap.status))
+    .sort((a, b) => primaryDate(a).localeCompare(primaryDate(b)));
 
-  els.upcomingList.innerHTML = "";
+  els.activeSwapList.innerHTML = "";
   if (!items.length) {
     const li = document.createElement("li");
-    li.textContent = "Nothing scheduled in the next week.";
-    els.upcomingList.appendChild(li);
+    li.textContent = "No active shift swap requests.";
+    els.activeSwapList.appendChild(li);
     return;
   }
 
   items.slice(0, 8).forEach((item) => {
     const li = document.createElement("li");
-    li.textContent = `${formatDate(item.date)}: ${item.text}`;
-    els.upcomingList.appendChild(li);
+    const takeText = item.takeDate ? ` for ${formatDate(item.takeDate)} ${item.takeShift || ""}` : "";
+    const requester = document.createElement("strong");
+    requester.textContent = item.requester;
+    const request = document.createTextNode(` needs ${formatDate(item.giveDate)} ${item.giveShift || ""}${takeText}`);
+    const meta = document.createElement("span");
+    meta.textContent = `${item.covering ? `Covering: ${item.covering}` : "Open coverage"} - ${item.status}`;
+    li.append(requester, request, meta);
+    els.activeSwapList.appendChild(li);
   });
 }
 

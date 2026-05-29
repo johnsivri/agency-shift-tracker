@@ -193,7 +193,7 @@ button:focus-visible {
 }
 
 .quick-summary div,
-.upcoming,
+.active-swaps,
 .panel {
   background: rgba(255, 255, 255, 0.92);
   border: 1px solid var(--line);
@@ -220,12 +220,12 @@ button:focus-visible {
   font-size: 0.82rem;
 }
 
-.upcoming {
+.active-swaps {
   border-radius: 8px;
   padding: 16px;
 }
 
-.upcoming ul {
+.active-swaps ul {
   margin: 12px 0 0;
   padding: 0;
   list-style: none;
@@ -233,11 +233,22 @@ button:focus-visible {
   gap: 9px;
 }
 
-.upcoming li {
+.active-swaps li {
   border-left: 4px solid var(--blue);
   padding: 4px 0 4px 10px;
   color: var(--muted);
   font-size: 0.86rem;
+}
+
+.active-swaps strong {
+  display: block;
+  color: var(--ink);
+  font-size: 0.9rem;
+}
+
+.active-swaps span {
+  display: block;
+  margin-top: 3px;
 }
 
 .workspace {
@@ -383,7 +394,7 @@ tbody tr:hover {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
-  .upcoming {
+  .active-swaps {
     grid-column: span 2;
   }
 
@@ -414,7 +425,7 @@ tbody tr:hover {
   }
 
   .quick-summary,
-  .upcoming,
+  .active-swaps,
   .wide {
     grid-column: auto;
   }
