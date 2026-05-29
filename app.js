@@ -49,7 +49,9 @@ const seedData = {
 
 let state = loadState();
 let authUser = null;
+let currentProfile = null;
 let supabaseClient = createSupabaseClient();
+let isLoadingRemote = false;
 
 const els = {
   authForm: document.querySelector("#authForm"),
@@ -88,29 +90,34 @@ document.querySelector("#courtForm").elements.date.addEventListener("input", (ev
   applyCourtTime(event.currentTarget.form);
 });
 
-document.querySelector("#courtForm").addEventListener("submit", (event) => {
+document.querySelector("#courtForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!applyCourtTime(event.currentTarget)) return;
-  saveForm("court", event.currentTarget, ["date", "officer", "caseNumber", "court", "time", "duration", "status", "subpoena", "notes"]);
+  await saveForm("court", event.currentTarget, ["date", "officer", "caseNumber", "court", "time", "duration", "status", "subpoena", "notes"]);
 });
 
-document.querySelector("#swapForm").addEventListener("submit", (event) => {
+document.querySelector("#swapForm").addEventListener("submit", async (event) => {
   event.preventDefault();
-  saveForm("swaps", event.currentTarget, ["requester", "acceptingOfficer", "giveDate", "giveShift", "takeDate", "takeShift", "requesterApproval", "requesterSupervisorApproval", "acceptingSupervisorApproval", "notes"]);
+  await saveForm("swaps", event.currentTarget, ["requester", "acceptingOfficer", "giveDate", "giveShift", "takeDate", "takeShift", "requesterApproval", "requesterSupervisorApproval", "acceptingSupervisorApproval", "notes"]);
 });
 
 els.monthFilter.addEventListener("input", render);
 els.unitFilter.addEventListener("change", () => {
-  localStorage.setItem(`${STORAGE_KEY}-unit`, els.unitFilter.value);
+  if (!isRemoteMode()) localStorage.setItem(`${STORAGE_KEY}-unit`, els.unitFilter.value);
   render();
 });
 els.searchFilter.addEventListener("input", render);
 document.querySelector("#exportCsv").addEventListener("click", exportCsv);
 document.querySelector("#printView").addEventListener("click", () => window.print());
-document.querySelector("#resetDemo").addEventListener("click", () => {
+document.querySelector("#resetDemo").addEventListener("click", async () => {
+  if (isRemoteMode()) {
+    await loadSupabaseState();
+    return;
+  }
   if (!confirm("Reset the tracker to demo data?")) return;
   state = structuredClone(seedData);
   persist();
+  populateUnitFilter();
   render();
 });
 
@@ -121,13 +128,26 @@ async function initializeApp() {
   if (supabaseClient) {
     const { data } = await supabaseClient.auth.getUser();
     authUser = data.user || null;
-    supabaseClient.auth.onAuthStateChange((_event, session) => {
+    supabaseClient.auth.onAuthStateChange(async (_event, session) => {
       authUser = session?.user || null;
-      updateAuthState();
+      if (authUser) {
+        await loadSupabaseState();
+      } else {
+        currentProfile = null;
+        state = loadState();
+        populateUnitFilter();
+        updateAuthState();
+        render();
+      }
     });
   }
-  updateAuthState();
-  render();
+
+  if (authUser) {
+    await loadSupabaseState();
+  } else {
+    updateAuthState();
+    render();
+  }
 }
 
 function activateTab(name) {
@@ -135,7 +155,7 @@ function activateTab(name) {
   document.querySelectorAll(".panel").forEach((panel) => panel.classList.toggle("is-active", panel.id === `tab-${name}`));
 }
 
-function saveForm(collection, form, fields) {
+async function saveForm(collection, form, fields) {
   const formData = new FormData(form);
   const item = {};
 
@@ -146,20 +166,26 @@ function saveForm(collection, form, fields) {
 
   item.id = form.elements.id.value || uid();
   if (collection === "swaps") item.status = deriveSwapStatus(item);
-  const index = state[collection].findIndex((record) => record.id === item.id);
 
-  if (index >= 0) {
-    state[collection][index] = item;
+  if (isRemoteMode()) {
+    const saved = collection === "court" ? await saveSupabaseCourt(item) : await saveSupabaseSwap(item);
+    if (!saved) return;
+    await loadSupabaseState();
   } else {
-    state[collection].push(item);
+    const index = state[collection].findIndex((record) => record.id === item.id);
+    if (index >= 0) {
+      state[collection][index] = item;
+    } else {
+      state[collection].push(item);
+    }
+    populateUnitFilter();
+    persist();
+    render();
   }
 
   form.reset();
   form.elements.id.value = "";
   if (collection === "court") applyCourtTime(form);
-  populateUnitFilter();
-  persist();
-  render();
 }
 
 function editRecord(collection, id) {
@@ -180,7 +206,18 @@ function editRecord(collection, id) {
   form.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
-function deleteRecord(collection, id) {
+async function deleteRecord(collection, id) {
+  if (isRemoteMode()) {
+    const table = collection === "court" ? "traffic_court_events" : "shift_swap_requests";
+    const { error } = await supabaseClient.from(table).delete().eq("id", id);
+    if (error) {
+      setStatus(`Delete failed: ${error.message}`);
+      return;
+    }
+    await loadSupabaseState();
+    return;
+  }
+
   state[collection] = state[collection].filter((item) => item.id !== id);
   populateUnitFilter();
   persist();
@@ -388,9 +425,17 @@ function getFilters() {
 }
 
 function populateUnitFilter() {
-  const current = els.unitFilter.value || localStorage.getItem(`${STORAGE_KEY}-unit`) || "";
+  const current = currentProfile?.role === "officer"
+    ? currentProfile.display_name
+    : els.unitFilter.value || localStorage.getItem(`${STORAGE_KEY}-unit`) || "";
   const units = getUnitNames();
   els.unitFilter.innerHTML = "";
+  if (isRemoteMode() && currentProfile.role !== "officer") {
+    const allOption = document.createElement("option");
+    allOption.value = "";
+    allOption.textContent = "All visible units";
+    els.unitFilter.appendChild(allOption);
+  }
   units.forEach((unit) => {
     const option = document.createElement("option");
     option.value = unit;
@@ -398,14 +443,20 @@ function populateUnitFilter() {
     els.unitFilter.appendChild(option);
   });
   els.unitFilter.value = units.includes(current) ? current : units[0] || "";
+  if (isRemoteMode() && currentProfile.role !== "officer" && !current) els.unitFilter.value = "";
+  els.unitFilter.disabled = isRemoteMode() && currentProfile.role === "officer";
+  applyCurrentProfileDefaults();
 }
 
 function getUnitNames() {
   const names = new Set();
-  if (Array.isArray(state.roster)) {
+  if (!isRemoteMode() && Array.isArray(state.roster)) {
     state.roster.forEach((record) => {
       if (record.role === "officer" && record.name) names.add(record.name);
     });
+  }
+  if (isRemoteMode() && currentProfile?.role === "officer") {
+    names.add(currentProfile.display_name);
   }
   state.shifts.forEach((record) => record.officer && names.add(record.officer));
   state.court.forEach((record) => record.officer && names.add(record.officer));
@@ -596,29 +647,258 @@ function createSupabaseClient() {
 
 async function signIn(email, password) {
   if (!supabaseClient) {
-    els.authState.textContent = "Add Supabase URL and anon key in app-config.js to enable login.";
+    setStatus("Add Supabase URL and anon key in app-config.js to enable login.");
     return;
   }
   const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
   if (error) {
-    els.authState.textContent = `Sign in failed: ${error.message}`;
+    setStatus(`Sign in failed: ${error.message}`);
     return;
   }
   authUser = data.user;
-  updateAuthState();
+  await loadSupabaseState();
 }
 
 async function signOut() {
   if (!supabaseClient) return;
   await supabaseClient.auth.signOut();
   authUser = null;
+  currentProfile = null;
+  state = loadState();
+  populateUnitFilter();
   updateAuthState();
+  render();
 }
 
 function updateAuthState() {
-  if (!supabaseClient) {
-    els.authState.textContent = "Local demo mode - Supabase not configured";
+  if (isLoadingRemote) {
+    setStatus("Loading shared Supabase data...");
     return;
   }
-  els.authState.textContent = authUser ? `Signed in as ${authUser.email}` : "Supabase ready - sign in required for shared data";
+  if (!supabaseClient) {
+    setStatus("Local demo mode - Supabase not configured");
+    return;
+  }
+  if (!authUser) {
+    setStatus("Supabase ready - sign in required for shared data");
+    return;
+  }
+  const name = currentProfile?.display_name || authUser.email;
+  setStatus(`Signed in as ${name}`);
+}
+
+function setStatus(message) {
+  els.authState.textContent = message;
+}
+
+function isRemoteMode() {
+  return Boolean(supabaseClient && authUser && currentProfile);
+}
+
+async function loadSupabaseState() {
+  if (!supabaseClient || !authUser) return;
+  isLoadingRemote = true;
+  updateAuthState();
+
+  try {
+    const profiles = await fetchSupabaseProfiles();
+    currentProfile = profiles.find((profile) => profile.id === authUser.id) || null;
+    if (!currentProfile) {
+      throw new Error("No public.profiles row found for this signed-in user.");
+    }
+
+    const [shifts, court, swaps] = await Promise.all([
+      fetchSupabaseShiftAssignments(profiles),
+      fetchSupabaseCourtEvents(profiles),
+      fetchSupabaseSwapRequests(profiles)
+    ]);
+
+    state = {
+      roster: profiles.map((profile) => ({
+        id: profile.id,
+        name: profile.display_name,
+        badgeNumber: profile.badge_number || "",
+        role: profile.role,
+        supervisor: profileName(profiles, profile.supervisor_id)
+      })),
+      shifts,
+      court,
+      swaps
+    };
+    populateUnitFilter();
+    render();
+  } catch (error) {
+    setStatus(`Supabase load failed: ${error.message}`);
+  } finally {
+    isLoadingRemote = false;
+    updateAuthState();
+  }
+}
+
+async function fetchSupabaseProfiles() {
+  const { data, error } = await supabaseClient
+    .from("profiles")
+    .select("id, display_name, badge_number, role, supervisor_id")
+    .order("display_name");
+  if (error) throw error;
+  return data || [];
+}
+
+async function fetchSupabaseShiftAssignments(profiles) {
+  const { data, error } = await supabaseClient
+    .from("shift_assignments")
+    .select("id, officer_id, shift, starts_at, ends_at, active")
+    .eq("active", true);
+  if (error) throw error;
+  return (data || []).map((row) => ({
+    id: row.id,
+    date: isoToday,
+    officerId: row.officer_id,
+    officer: profileName(profiles, row.officer_id),
+    agency: "Patrol",
+    shift: row.shift,
+    start: trimTime(row.starts_at),
+    end: trimTime(row.ends_at),
+    status: "Scheduled",
+    notes: ""
+  }));
+}
+
+async function fetchSupabaseCourtEvents(profiles) {
+  const { data, error } = await supabaseClient
+    .from("traffic_court_events")
+    .select("id, officer_id, court_date, court_time, court_hours, citation_number, complainant, has_attorney, court_location, status, notes")
+    .order("court_date");
+  if (error) throw error;
+  return (data || []).map((row) => ({
+    id: row.id,
+    officerId: row.officer_id,
+    officer: profileName(profiles, row.officer_id),
+    date: row.court_date,
+    time: trimTime(row.court_time),
+    duration: String(row.court_hours || 0),
+    caseNumber: row.citation_number,
+    court: row.court_location || "Traffic Court",
+    status: row.status,
+    subpoena: true,
+    notes: courtNotes(row)
+  }));
+}
+
+async function fetchSupabaseSwapRequests(profiles) {
+  const { data, error } = await supabaseClient
+    .from("shift_swap_requests")
+    .select("id, requesting_officer_id, accepting_officer_id, give_date, give_shift, take_date, take_shift, requesting_officer_approval, requester_supervisor_approval, accepting_supervisor_approval, status, notes")
+    .order("give_date");
+  if (error) throw error;
+  return (data || []).map((row) => ({
+    id: row.id,
+    requesterId: row.requesting_officer_id,
+    acceptingOfficerId: row.accepting_officer_id,
+    requester: profileName(profiles, row.requesting_officer_id),
+    acceptingOfficer: profileName(profiles, row.accepting_officer_id),
+    giveDate: row.give_date,
+    giveShift: row.give_shift || "",
+    takeDate: row.take_date || "",
+    takeShift: row.take_shift || "",
+    requesterApproval: row.requesting_officer_approval,
+    requesterSupervisorApproval: row.requester_supervisor_approval,
+    acceptingSupervisorApproval: row.accepting_supervisor_approval,
+    status: row.status,
+    notes: row.notes || ""
+  }));
+}
+
+async function saveSupabaseCourt(item) {
+  const officerId = profileIdByName(item.officer);
+  if (!officerId) {
+    setStatus("Court save failed: choose an officer from the roster.");
+    return false;
+  }
+  const payload = {
+    officer_id: officerId,
+    court_date: item.date,
+    court_time: item.time,
+    court_hours: Number(item.duration || 0),
+    citation_number: item.caseNumber,
+    court_location: item.court || "Traffic Court",
+    status: item.status,
+    notes: item.notes || "",
+    created_by: authUser.id
+  };
+
+  const query = supabaseClient.from("traffic_court_events");
+  const { error } = item.id && isUuid(item.id)
+    ? await query.update(payload).eq("id", item.id)
+    : await query.insert(payload);
+  if (error) {
+    setStatus(`Court save failed: ${error.message}`);
+    return false;
+  }
+  return true;
+}
+
+async function saveSupabaseSwap(item) {
+  const requesterId = profileIdByName(item.requester) || currentProfile?.id;
+  const acceptingOfficerId = profileIdByName(item.acceptingOfficer);
+  const payload = {
+    requesting_officer_id: requesterId,
+    accepting_officer_id: acceptingOfficerId || null,
+    give_date: item.giveDate,
+    give_shift: item.giveShift || "",
+    take_date: item.takeDate || null,
+    take_shift: item.takeShift || "",
+    requesting_officer_approval: item.requesterApproval,
+    requester_supervisor_approval: item.requesterSupervisorApproval,
+    accepting_supervisor_approval: item.acceptingSupervisorApproval,
+    status: deriveSwapStatus(item),
+    notes: item.notes || ""
+  };
+
+  const query = supabaseClient.from("shift_swap_requests");
+  const { error } = item.id && isUuid(item.id)
+    ? await query.update(payload).eq("id", item.id)
+    : await query.insert(payload);
+  if (error) {
+    setStatus(`Swap save failed: ${error.message}`);
+    return false;
+  }
+  return true;
+}
+
+function profileName(profiles, id) {
+  if (!id) return "";
+  return profiles.find((profile) => profile.id === id)?.display_name || "";
+}
+
+function profileIdByName(name) {
+  if (!name) return "";
+  return state.roster.find((profile) => profile.name === name)?.id || "";
+}
+
+function courtNotes(row) {
+  const parts = [];
+  if (row.notes) parts.push(row.notes);
+  if (row.complainant) parts.push(`Complainant: ${row.complainant}`);
+  parts.push(`Attorney: ${row.has_attorney ? "yes" : "no"}`);
+  return parts.join("; ");
+}
+
+function trimTime(value) {
+  return String(value || "").slice(0, 5);
+}
+
+function isUuid(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(value || ""));
+}
+
+function applyCurrentProfileDefaults() {
+  if (!currentProfile) return;
+  const courtForm = document.querySelector("#courtForm");
+  const swapForm = document.querySelector("#swapForm");
+  if (courtForm && !courtForm.elements.officer.value) courtForm.elements.officer.value = currentProfile.display_name;
+  if (swapForm && !swapForm.elements.requester.value) swapForm.elements.requester.value = currentProfile.display_name;
+  const isOfficer = currentProfile.role === "officer";
+  if (courtForm) courtForm.elements.officer.readOnly = isOfficer;
+  if (swapForm) swapForm.elements.requester.readOnly = isOfficer;
 }

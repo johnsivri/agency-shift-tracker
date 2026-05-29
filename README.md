@@ -16,7 +16,8 @@ A small browser-based tracker for agency shift operations.
 - Patrol-unit scoped views for each unit's own shifts, court, and swap information
 - Open shift swap request sidebar shared across patrol units
 - Month and search filters
-- Supabase-ready secure access panel
+- Supabase-backed secure access panel
+- Signed-in users load shared court, roster, shift assignment, and swap data from Supabase
 - Mobile card views for court and shift swap records
 - Local demo roster with two supervisors and six officers
 - CSV export and print view
@@ -55,6 +56,10 @@ You can find each UUID in Supabase under Authentication > Users.
 For test data, `supabase/demo-profiles-template.sql` includes two supervisors and six officers. Replace the placeholder UUIDs with real Auth user UUIDs before running it.
 
 The app will remain in local demo mode until `app-config.js` has Supabase values.
+
+After sign-in, officers are locked to their own profile view. Supervisors and admins can use the Patrol Unit selector to view records that Supabase Row Level Security allows them to access.
+
+If you already ran `supabase/schema.sql` before this point, run `supabase/update-swap-accept-policy.sql` so authenticated officers can accept open swap requests.
 
 Security notes and RLS expectations are in `SECURITY.md`.
 
