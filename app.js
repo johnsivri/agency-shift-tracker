@@ -325,7 +325,7 @@ function render() {
     approvalSummary(item),
     statusPill(item.status),
     rowActions("swaps", item.id, item)
-  ], 8);
+  ], 8, "No matching swap records. Active swaps remain visible regardless of month.");
   renderSwapCards(swaps);
 
   renderSummary(filters);
@@ -381,14 +381,14 @@ function emptyCard(message) {
   return card;
 }
 
-function renderRows(target, rows, mapRow, colSpan = 7) {
+function renderRows(target, rows, mapRow, colSpan = 7, emptyMessage = "No matching records yet.") {
   target.innerHTML = "";
   if (!rows.length) {
     const tr = document.createElement("tr");
     const td = document.createElement("td");
     td.colSpan = colSpan;
     td.className = "empty";
-    td.textContent = "No matching records yet.";
+    td.textContent = emptyMessage;
     tr.appendChild(td);
     target.appendChild(tr);
     return;
@@ -526,12 +526,9 @@ function filterSwapRecords(records, filters) {
   const searchableFields = ["giveDate", "takeDate", "requester", "acceptingOfficer", "giveShift", "takeShift", "status", "notes"];
   return records.filter((record) => {
     const monthMatch = itemMonth(primaryDate(record)) === filters.month;
-    const openForOtherOfficer = isRemoteMode()
-      && currentProfile?.role === "officer"
-      && isOpenSwap(record)
-      && record.requester !== currentProfile.display_name;
+    const activeSwap = isActiveSwap(record);
     const textMatch = !filters.search || searchableFields.some((field) => String(record[field] || "").toLowerCase().includes(filters.search));
-    return (monthMatch || openForOtherOfficer) && textMatch;
+    return (monthMatch || activeSwap) && textMatch;
   });
 }
 
