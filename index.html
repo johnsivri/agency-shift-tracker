@@ -12,16 +12,22 @@
         <p class="eyebrow">Agency operations</p>
         <h1>Shift Tracker</h1>
       </div>
-      <div class="actions auth-gated">
-        <button class="icon-button" id="exportCsv" title="Export all records as CSV" aria-label="Export all records as CSV">CSV</button>
-        <button class="icon-button" id="printView" title="Print report" aria-label="Print report">PRN</button>
-        <button class="icon-button danger" id="resetDemo" title="Reset demo data" aria-label="Reset demo data">RST</button>
+      <div class="topbar-tools auth-gated">
+        <div class="account-strip">
+          <span id="accountState">Signed in</span>
+          <button class="ghost" type="button" id="signOut">Sign Out</button>
+        </div>
+        <div class="actions">
+          <button class="icon-button" id="exportCsv" title="Export all records as CSV" aria-label="Export all records as CSV">CSV</button>
+          <button class="icon-button" id="printView" title="Print report" aria-label="Print report">PRN</button>
+          <button class="icon-button danger" id="resetDemo" title="Reset demo data" aria-label="Reset demo data">RST</button>
+        </div>
       </div>
     </header>
 
     <main class="app-shell">
       <aside class="sidebar" aria-label="Filters and summary">
-        <section class="auth-panel" aria-label="Account access">
+        <section class="auth-panel signed-out-only" aria-label="Account access">
           <h2>Secure Access</h2>
           <p id="authState">Local demo mode</p>
           <form id="authForm" class="auth-form">
@@ -29,7 +35,6 @@
             <label class="field"><span>Password</span><input type="password" name="password" autocomplete="current-password" placeholder="Password" /></label>
             <div class="auth-actions">
               <button class="primary" type="submit">Sign In</button>
-              <button class="ghost" type="button" id="signOut">Sign Out</button>
             </div>
           </form>
         </section>

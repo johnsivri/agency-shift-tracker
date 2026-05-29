@@ -57,6 +57,7 @@ let activeLoadId = 0;
 const els = {
   authForm: document.querySelector("#authForm"),
   authState: document.querySelector("#authState"),
+  accountState: document.querySelector("#accountState"),
   signOut: document.querySelector("#signOut"),
   monthFilter: document.querySelector("#monthFilter"),
   unitFilter: document.querySelector("#unitFilter"),
@@ -812,6 +813,7 @@ function canViewData() {
 
 function setStatus(message) {
   els.authState.textContent = message;
+  if (els.accountState) els.accountState.textContent = message;
 }
 
 function isRemoteMode() {
