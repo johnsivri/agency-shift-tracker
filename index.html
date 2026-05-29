@@ -45,7 +45,7 @@
           </div>
           <div>
             <span class="metric" id="swapCount">0</span>
-            <span class="label">Pending swaps</span>
+            <span class="label">Active swaps</span>
           </div>
         </section>
 
@@ -93,34 +93,32 @@
           <div class="panel-heading">
             <div>
               <h2>Shift Swaps</h2>
-              <p>Record requested swaps and whether they are pending, approved, or denied.</p>
+              <p>Post open requests, accept coverage, and track required approvals.</p>
             </div>
           </div>
           <form id="swapForm" class="entry-form">
             <input type="hidden" name="id" />
-            <label class="field"><span>Requester</span><input name="requester" required placeholder="Name" /></label>
-            <label class="field"><span>Covering Officer</span><input name="covering" placeholder="Optional until accepted" /></label>
+            <label class="field"><span>Requesting Officer</span><input name="requester" required placeholder="Name" /></label>
+            <label class="field"><span>Accepting Officer</span><input name="acceptingOfficer" placeholder="Any officer can accept" /></label>
             <label class="field"><span>Give Date</span><input type="date" name="giveDate" required /></label>
             <label class="field"><span>Give Shift</span><input name="giveShift" placeholder="0700-1500" /></label>
             <label class="field"><span>Take Date</span><input type="date" name="takeDate" /></label>
             <label class="field"><span>Take Shift</span><input name="takeShift" placeholder="1500-2300" /></label>
-            <label class="field"><span>Status</span><select name="status"><option>Pending</option><option>Approved</option><option>Denied</option><option>Completed</option></select></label>
+            <label class="field"><span>Requesting Officer Approval</span><select name="requesterApproval"><option>Pending</option><option>Approved</option><option>Denied</option></select></label>
+            <label class="field"><span>Requester Supervisor Approval</span><select name="requesterSupervisorApproval"><option>Pending</option><option>Approved</option><option>Denied</option></select></label>
+            <label class="field"><span>Accepting Supervisor Approval</span><select name="acceptingSupervisorApproval"><option>Pending</option><option>Approved</option><option>Denied</option></select></label>
             <label class="field wide"><span>Notes</span><input name="notes" placeholder="Supervisor notes" /></label>
             <button class="primary" type="submit">Save Swap</button>
           </form>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Give Date</th><th>Requester</th><th>Covering</th><th>Give</th><th>Take</th><th>Status</th><th></th></tr></thead>
+              <thead><tr><th>Give Date</th><th>Requesting</th><th>Accepting</th><th>Give</th><th>Take</th><th>Approvals</th><th>Status</th><th></th></tr></thead>
               <tbody id="swapRows"></tbody>
             </table>
           </div>
         </section>
       </section>
     </main>
-
-    <template id="emptyState">
-      <tr><td colspan="7" class="empty">No matching records yet.</td></tr>
-    </template>
 
     <script src="app.js"></script>
   </body>

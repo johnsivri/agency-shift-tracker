@@ -25,7 +25,7 @@ const seedData = {
     { id: uid(), date: nextCourtDate, officer: "Dana Price", caseNumber: "26-1842", court: "District 4", time: courtTimeForDate(nextCourtDate), duration: "2", status: "Scheduled", subpoena: true, notes: "Bring body cam notes" }
   ],
   swaps: [
-    { id: uid(), requester: "M. Alvarez", covering: "Jordan Lee", giveDate: nextWeek, giveShift: "1500-2300", takeDate: "", takeShift: "", status: "Pending", notes: "Awaiting supervisor approval" }
+    { id: uid(), requester: "M. Alvarez", acceptingOfficer: "", giveDate: nextWeek, giveShift: "0600-1800", takeDate: "", takeShift: "", requesterApproval: "Pending", requesterSupervisorApproval: "Pending", acceptingSupervisorApproval: "Pending", status: "Open", notes: "Open for acceptance" }
   ]
 };
 
@@ -62,7 +62,7 @@ document.querySelector("#courtForm").addEventListener("submit", (event) => {
 
 document.querySelector("#swapForm").addEventListener("submit", (event) => {
   event.preventDefault();
-  saveForm("swaps", event.currentTarget, ["requester", "covering", "giveDate", "giveShift", "takeDate", "takeShift", "status", "notes"]);
+  saveForm("swaps", event.currentTarget, ["requester", "acceptingOfficer", "giveDate", "giveShift", "takeDate", "takeShift", "requesterApproval", "requesterSupervisorApproval", "acceptingSupervisorApproval", "notes"]);
 });
 
 els.monthFilter.addEventListener("input", render);
@@ -98,6 +98,7 @@ function saveForm(collection, form, fields) {
   });
 
   item.id = form.elements.id.value || uid();
+  if (collection === "swaps") item.status = deriveSwapStatus(item);
   const index = state[collection].findIndex((record) => record.id === item.id);
 
   if (index >= 0) {
@@ -115,6 +116,7 @@ function saveForm(collection, form, fields) {
 }
 
 function editRecord(collection, id) {
+  if (collection === "swaps") normalizeSwapRecords();
   const record = state[collection].find((item) => item.id === id);
   const form = document.querySelector(`#${collection === "shifts" ? "shift" : collection === "swaps" ? "swap" : collection}Form`);
   if (!record || !form) return;
@@ -141,8 +143,9 @@ function deleteRecord(collection, id) {
 function render() {
   const filters = getFilters();
   normalizeShiftRecords();
+  normalizeSwapRecords();
   const court = filterRecords(state.court.filter((record) => isUnitRecord(record, filters.unit)), filters, ["date", "caseNumber", "court", "status", "notes"]);
-  const swaps = filterRecords(state.swaps.filter((record) => isUnitSwap(record, filters.unit)), filters, ["giveDate", "takeDate", "requester", "covering", "giveShift", "takeShift", "status", "notes"]);
+  const swaps = filterRecords(state.swaps.filter((record) => isUnitSwap(record, filters.unit)), filters, ["giveDate", "takeDate", "requester", "acceptingOfficer", "giveShift", "takeShift", "status", "notes"]);
 
   renderRows(els.courtRows, court, (item) => [
     formatDate(item.date),
@@ -152,26 +155,33 @@ function render() {
     statusPill(item.status),
     item.duration ? `${Number(item.duration).toFixed(2)}h` : "-",
     rowActions("court", item.id)
-  ]);
+  ], 7);
 
   renderRows(els.swapRows, swaps, (item) => [
     formatDate(item.giveDate),
     item.requester,
-    item.covering || "-",
+    item.acceptingOfficer || "Open",
     item.giveShift || "-",
     item.takeDate ? `${formatDate(item.takeDate)} ${item.takeShift}` : "-",
+    approvalSummary(item),
     statusPill(item.status),
     rowActions("swaps", item.id)
-  ]);
+  ], 8);
 
   renderSummary(filters);
   renderActiveSwapRequests();
 }
 
-function renderRows(target, rows, mapRow) {
+function renderRows(target, rows, mapRow, colSpan = 7) {
   target.innerHTML = "";
   if (!rows.length) {
-    target.appendChild(document.querySelector("#emptyState").content.cloneNode(true));
+    const tr = document.createElement("tr");
+    const td = document.createElement("td");
+    td.colSpan = colSpan;
+    td.className = "empty";
+    td.textContent = "No matching records yet.";
+    tr.appendChild(td);
+    target.appendChild(tr);
     return;
   }
 
@@ -212,7 +222,7 @@ function statusPill(status) {
   const normalized = String(status || "").toLowerCase();
   const kind = normalized.includes("approved") || normalized.includes("worked") || normalized.includes("appeared") || normalized.includes("completed")
     ? "good"
-    : normalized.includes("pending") || normalized.includes("scheduled")
+    : normalized.includes("pending") || normalized.includes("scheduled") || normalized.includes("open") || normalized.includes("awaiting")
       ? "info"
       : normalized.includes("denied") || normalized.includes("canceled")
         ? "bad"
@@ -224,11 +234,12 @@ function statusPill(status) {
 
 function renderSummary(filters) {
   normalizeShiftRecords();
+  normalizeSwapRecords();
   const inMonth = (item) => itemMonth(primaryDate(item)) === filters.month;
   const courtInMonth = state.court.filter((item) => inMonth(item) && isUnitRecord(item, filters.unit));
   const courtHours = courtInMonth.reduce((sum, court) => sum + Number(court.duration || 0), 0);
   const courtCount = courtInMonth.length;
-  const swapCount = state.swaps.filter((swap) => itemMonth(swap.giveDate) === filters.month && swap.status === "Pending" && isUnitSwap(swap, filters.unit)).length;
+  const swapCount = state.swaps.filter((swap) => itemMonth(swap.giveDate) === filters.month && isActiveSwap(swap) && isUnitSwap(swap, filters.unit)).length;
 
   els.courtHours.textContent = formatHours(courtHours);
   els.courtCount.textContent = courtCount;
@@ -236,8 +247,9 @@ function renderSummary(filters) {
 }
 
 function renderActiveSwapRequests() {
+  normalizeSwapRecords();
   const items = state.swaps
-    .filter((swap) => swap.status === "Pending")
+    .filter((swap) => isOpenSwap(swap))
     .sort((a, b) => primaryDate(a).localeCompare(primaryDate(b)));
 
   els.activeSwapList.innerHTML = "";
@@ -253,9 +265,9 @@ function renderActiveSwapRequests() {
     const takeText = item.takeDate ? ` for ${formatDate(item.takeDate)} ${item.takeShift || ""}` : "";
     const requester = document.createElement("strong");
     requester.textContent = item.requester;
-    const request = document.createTextNode(` needs ${formatDate(item.giveDate)} ${item.giveShift || ""}${takeText}`);
+    const request = document.createTextNode(` requests ${formatDate(item.giveDate)} ${item.giveShift || ""}${takeText}`);
     const meta = document.createElement("span");
-    meta.textContent = `${item.covering ? `Covering: ${item.covering}` : "Open coverage"} - ${item.status}`;
+    meta.textContent = "Open for any officer to accept";
     li.append(requester, request, meta);
     els.activeSwapList.appendChild(li);
   });
@@ -296,7 +308,7 @@ function getUnitNames() {
   state.court.forEach((record) => record.officer && names.add(record.officer));
   state.swaps.forEach((record) => {
     if (record.requester) names.add(record.requester);
-    if (record.covering) names.add(record.covering);
+    if (record.acceptingOfficer) names.add(record.acceptingOfficer);
   });
   return [...names].sort((a, b) => a.localeCompare(b));
 }
@@ -306,7 +318,46 @@ function isUnitRecord(record, unit) {
 }
 
 function isUnitSwap(record, unit) {
-  return !unit || record.requester === unit || record.covering === unit;
+  return !unit || record.requester === unit || record.acceptingOfficer === unit;
+}
+
+function normalizeSwapRecords() {
+  state.swaps.forEach((swap) => {
+    if (!swap.acceptingOfficer && swap.covering) swap.acceptingOfficer = swap.covering;
+    delete swap.covering;
+    swap.requesterApproval = swap.requesterApproval || (swap.status === "Approved" ? "Approved" : "Pending");
+    swap.requesterSupervisorApproval = swap.requesterSupervisorApproval || (swap.status === "Approved" ? "Approved" : "Pending");
+    swap.acceptingSupervisorApproval = swap.acceptingSupervisorApproval || (swap.status === "Approved" ? "Approved" : "Pending");
+    swap.status = deriveSwapStatus(swap);
+  });
+}
+
+function deriveSwapStatus(swap) {
+  const approvals = [swap.requesterApproval, swap.requesterSupervisorApproval, swap.acceptingSupervisorApproval];
+  if (approvals.includes("Denied")) return "Denied";
+  if (!swap.acceptingOfficer) return "Open";
+  if (approvals.every((approval) => approval === "Approved")) return "Approved";
+  return "Awaiting Approvals";
+}
+
+function approvalSummary(swap) {
+  return [
+    `Officer: ${shortApproval(swap.requesterApproval)}`,
+    `Req Sup: ${shortApproval(swap.requesterSupervisorApproval)}`,
+    `Acc Sup: ${shortApproval(swap.acceptingSupervisorApproval)}`
+  ].join(" / ");
+}
+
+function shortApproval(value) {
+  return value === "Approved" ? "Yes" : value === "Denied" ? "No" : "Pending";
+}
+
+function isOpenSwap(swap) {
+  return deriveSwapStatus(swap) === "Open";
+}
+
+function isActiveSwap(swap) {
+  return ["Open", "Awaiting Approvals"].includes(deriveSwapStatus(swap));
 }
 
 function primaryDate(record) {

@@ -11,7 +11,8 @@ A small browser-based tracker for agency shift operations.
 - Traffic court schedule rules for Tuesdays at 1330 and Thursdays at 0900
 - Traffic court hours are tracked separately from shift hours
 - Court appearance tracking with case numbers, subpoena status, duration, and notes
-- Shift swap tracking with requester, covering officer, dates, status, and notes
+- Shift swap tracking with a requesting officer, accepting officer, and required approvals
+- Swap approval tracking for the requesting officer, requester's supervisor, and accepting officer's supervisor
 - Patrol-unit scoped views for each unit's own shifts, court, and swap information
 - Open shift swap request sidebar shared across patrol units
 - Month and search filters
