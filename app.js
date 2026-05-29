@@ -47,7 +47,7 @@ const seedData = {
   ]
 };
 
-let state = loadState();
+let state = emptyState();
 let authUser = null;
 let currentProfile = null;
 let supabaseClient = createSupabaseClient();
@@ -72,7 +72,7 @@ const els = {
 };
 
 els.monthFilter.value = isoToday.slice(0, 7);
-populateUnitFilter();
+updateAccessVisibility();
 
 document.querySelectorAll(".tab").forEach((tab) => {
   tab.addEventListener("click", () => activateTab(tab.dataset.tab));
@@ -109,17 +109,21 @@ els.unitFilter.addEventListener("change", () => {
 });
 els.searchFilter.addEventListener("input", render);
 document.querySelector("#exportCsv").addEventListener("click", exportCsv);
-document.querySelector("#printView").addEventListener("click", () => window.print());
+document.querySelector("#printView").addEventListener("click", () => {
+  if (!canViewData()) {
+    setStatus("Sign in before printing records.");
+    return;
+  }
+  window.print();
+});
 document.querySelector("#resetDemo").addEventListener("click", async () => {
   if (isRemoteMode()) {
     await loadSupabaseState();
     return;
   }
-  if (!confirm("Reset the tracker to demo data?")) return;
-  state = structuredClone(seedData);
-  persist();
-  populateUnitFilter();
-  render();
+  state = emptyState();
+  renderLockedState();
+  setStatus("Sign in before refreshing shared data.");
 });
 
 initializeApp();
@@ -135,10 +139,9 @@ async function initializeApp() {
         await loadSupabaseState("Session refreshed.");
       } else {
         currentProfile = null;
-        state = loadState();
-        populateUnitFilter();
+        state = emptyState();
         updateAuthState();
-        render();
+        renderLockedState();
       }
     });
   }
@@ -147,7 +150,7 @@ async function initializeApp() {
     await loadSupabaseState("Signed in.");
   } else {
     updateAuthState();
-    render();
+    renderLockedState();
   }
 }
 
@@ -157,6 +160,10 @@ function activateTab(name) {
 }
 
 async function saveForm(collection, form, fields) {
+  if (!canViewData()) {
+    setStatus("Sign in before saving records.");
+    return;
+  }
   const formData = new FormData(form);
   const item = {};
 
@@ -209,6 +216,10 @@ function editRecord(collection, id) {
 }
 
 async function deleteRecord(collection, id) {
+  if (!canViewData()) {
+    setStatus("Sign in before deleting records.");
+    return;
+  }
   if (isRemoteMode()) {
     const table = collection === "court" ? "traffic_court_events" : "shift_swap_requests";
     try {
@@ -265,6 +276,10 @@ async function acceptSwap(id) {
 }
 
 function render() {
+  if (!canViewData()) {
+    renderLockedState();
+    return;
+  }
   const filters = getFilters();
   normalizeShiftRecords();
   normalizeSwapRecords();
@@ -678,11 +693,39 @@ function loadState() {
   }
 }
 
+function emptyState() {
+  return {
+    roster: [],
+    shifts: [],
+    court: [],
+    swaps: []
+  };
+}
+
+function renderLockedState() {
+  state = emptyState();
+  els.unitFilter.innerHTML = "";
+  els.searchFilter.value = "";
+  els.courtHours.textContent = "0";
+  els.courtCount.textContent = "0";
+  els.swapCount.textContent = "0";
+  els.activeSwapList.innerHTML = "";
+  els.courtRows.innerHTML = "";
+  els.courtCards.innerHTML = "";
+  els.swapRows.innerHTML = "";
+  els.swapCards.innerHTML = "";
+  updateAccessVisibility();
+}
+
 function persist() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
 function exportCsv() {
+  if (!canViewData()) {
+    setStatus("Sign in before exporting records.");
+    return;
+  }
   const sections = [
     ["roster", state.roster || []],
     ["shifts", state.shifts],
@@ -735,19 +778,19 @@ async function signOut() {
   await supabaseClient.auth.signOut();
   authUser = null;
   currentProfile = null;
-  state = loadState();
-  populateUnitFilter();
+  state = emptyState();
   updateAuthState();
-  render();
+  renderLockedState();
 }
 
 function updateAuthState() {
+  updateAccessVisibility();
   if (isLoadingRemote) {
     setStatus("Loading shared Supabase data...");
     return;
   }
   if (!supabaseClient) {
-    setStatus("Local demo mode - Supabase not configured");
+    setStatus("Login unavailable - Supabase is not configured");
     return;
   }
   if (!authUser) {
@@ -756,6 +799,15 @@ function updateAuthState() {
   }
   const name = currentProfile?.display_name || authUser.email;
   setStatus(`Signed in as ${name}`);
+}
+
+function updateAccessVisibility() {
+  document.body.classList.toggle("is-signed-in", canViewData());
+  document.body.classList.toggle("is-signed-out", !canViewData());
+}
+
+function canViewData() {
+  return Boolean(authUser && currentProfile);
 }
 
 function setStatus(message) {
@@ -775,8 +827,8 @@ async function loadSupabaseState(successMessage = "Shared Supabase data loaded."
 
   try {
     const profiles = await fetchSupabaseProfiles();
-    currentProfile = profiles.find((profile) => profile.id === authUser.id) || null;
-    if (!currentProfile) {
+    const signedInProfile = profiles.find((profile) => profile.id === authUser.id) || null;
+    if (!signedInProfile) {
       throw new Error("No public.profiles row found for this signed-in user.");
     }
 
@@ -786,6 +838,7 @@ async function loadSupabaseState(successMessage = "Shared Supabase data loaded."
       fetchSupabaseSwapRequests(profiles)
     ]);
 
+    currentProfile = signedInProfile;
     state = {
       roster: profiles.map((profile) => ({
         id: profile.id,
@@ -798,11 +851,16 @@ async function loadSupabaseState(successMessage = "Shared Supabase data loaded."
       court,
       swaps
     };
+    updateAccessVisibility();
     populateUnitFilter();
     render();
     if (loadId === activeLoadId) setStatus(successMessage);
   } catch (error) {
-    if (loadId === activeLoadId) setStatus(`Supabase load failed: ${error.message}`);
+    if (loadId === activeLoadId) {
+      currentProfile = null;
+      renderLockedState();
+      setStatus(`Supabase load failed: ${error.message}`);
+    }
   } finally {
     if (loadId === activeLoadId) {
       isLoadingRemote = false;

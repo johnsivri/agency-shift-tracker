@@ -6,13 +6,13 @@
     <title>Agency Shift Tracker</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
-  <body>
+  <body class="is-signed-out">
     <header class="topbar">
       <div>
         <p class="eyebrow">Agency operations</p>
         <h1>Shift Tracker</h1>
       </div>
-      <div class="actions">
+      <div class="actions auth-gated">
         <button class="icon-button" id="exportCsv" title="Export all records as CSV" aria-label="Export all records as CSV">CSV</button>
         <button class="icon-button" id="printView" title="Print report" aria-label="Print report">PRN</button>
         <button class="icon-button danger" id="resetDemo" title="Reset demo data" aria-label="Reset demo data">RST</button>
@@ -33,20 +33,20 @@
             </div>
           </form>
         </section>
-        <label class="field">
+        <label class="field auth-gated">
           <span>Month</span>
           <input type="month" id="monthFilter" />
         </label>
-        <label class="field">
+        <label class="field auth-gated">
           <span>Patrol Unit</span>
           <select id="unitFilter"></select>
         </label>
-        <label class="field">
+        <label class="field auth-gated">
           <span>Search</span>
           <input type="search" id="searchFilter" placeholder="Case, notes, status" />
         </label>
 
-        <section class="quick-summary" aria-label="Monthly summary">
+        <section class="quick-summary auth-gated" aria-label="Monthly summary">
           <div>
             <span class="metric" id="courtHours">0</span>
             <span class="label">Court hours</span>
@@ -61,13 +61,13 @@
           </div>
         </section>
 
-        <section class="active-swaps">
+        <section class="active-swaps auth-gated">
           <h2>Open Shift Swap Requests</h2>
           <ul id="activeSwapList"></ul>
         </section>
       </aside>
 
-      <section class="workspace">
+      <section class="workspace auth-gated">
         <nav class="tabs" aria-label="Tracker sections">
           <button class="tab is-active" data-tab="court">Court</button>
           <button class="tab" data-tab="swaps">Swaps</button>

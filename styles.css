@@ -136,6 +136,15 @@ h2 {
   padding: 24px clamp(18px, 4vw, 48px) 48px;
 }
 
+body.is-signed-out .auth-gated {
+  display: none;
+}
+
+body.is-signed-out .app-shell {
+  grid-template-columns: minmax(280px, 440px);
+  justify-content: center;
+}
+
 .sidebar {
   display: flex;
   flex-direction: column;
