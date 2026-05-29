@@ -100,7 +100,7 @@ document.querySelector("#courtForm").addEventListener("submit", async (event) =>
 
 document.querySelector("#swapForm").addEventListener("submit", async (event) => {
   event.preventDefault();
-  await saveForm("swaps", event.currentTarget, ["requester", "acceptingOfficer", "giveDate", "giveShift", "takeDate", "takeShift", "requesterApproval", "requesterSupervisorApproval", "acceptingSupervisorApproval", "notes"]);
+  await saveForm("swaps", event.currentTarget, ["requester", "acceptingOfficer", "giveDate", "giveShift", "takeDate", "takeShift", "notes"]);
 });
 
 els.monthFilter.addEventListener("input", render);
@@ -174,7 +174,7 @@ async function saveForm(collection, form, fields) {
   });
 
   item.id = form.elements.id.value || uid();
-  if (collection === "swaps") item.status = deriveSwapStatus(item);
+  if (collection === "swaps") applySwapWorkflowState(item);
 
   if (isRemoteMode()) {
     setStatus("Saving shared data...");
@@ -577,6 +577,14 @@ function normalizeSwapRecords() {
     swap.acceptingSupervisorApproval = swap.acceptingSupervisorApproval || (swap.status === "Approved" ? "Approved" : "Pending");
     swap.status = deriveSwapStatus(swap);
   });
+}
+
+function applySwapWorkflowState(item) {
+  const existing = state.swaps.find((swap) => swap.id === item.id) || {};
+  item.requesterApproval = existing.requesterApproval || "Pending";
+  item.requesterSupervisorApproval = existing.requesterSupervisorApproval || "Pending";
+  item.acceptingSupervisorApproval = existing.acceptingSupervisorApproval || "Pending";
+  item.status = deriveSwapStatus(item);
 }
 
 function deriveSwapStatus(swap) {
