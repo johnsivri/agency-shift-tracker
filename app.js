@@ -358,7 +358,7 @@ function render() {
     item.giveShift || "-",
     item.takeDate ? `${formatDate(item.takeDate)} ${item.takeShift}` : "-",
     approvalSummary(item),
-    statusPill(item.status),
+    statusPill(swapStageLabel(item)),
     rowActions("swaps", item.id, item)
   ], 8, "No matching swap records. Active swaps remain visible regardless of month.");
   renderSwapCards(swaps);
@@ -397,7 +397,7 @@ function renderSwapCards(swaps) {
     const card = document.createElement("article");
     card.className = "mobile-card";
     const title = document.createElement("h3");
-    title.textContent = `${formatDate(item.giveDate)} - ${item.status}`;
+    title.textContent = `${formatDate(item.giveDate)} - ${swapStageLabel(item)}`;
     const officers = document.createElement("p");
     officers.textContent = `${item.requester} -> ${item.acceptingOfficer || "Open"}`;
     const details = document.createElement("p");
@@ -507,7 +507,7 @@ function statusPill(status) {
   const normalized = String(status || "").toLowerCase();
   const kind = normalized.includes("approved") || normalized.includes("worked") || normalized.includes("appeared") || normalized.includes("completed")
     ? "good"
-    : normalized.includes("pending") || normalized.includes("scheduled") || normalized.includes("open") || normalized.includes("awaiting")
+    : normalized.includes("pending") || normalized.includes("scheduled") || normalized.includes("open") || normalized.includes("awaiting") || normalized.includes("review") || normalized.includes("proposal")
       ? "info"
       : normalized.includes("denied") || normalized.includes("canceled")
         ? "bad"
@@ -555,7 +555,7 @@ function renderActiveSwapRequests() {
     requester.textContent = item.requester;
     const request = document.createTextNode(` requests ${formatDate(item.giveDate)} ${item.giveShift || ""}${takeText}`);
     const meta = document.createElement("span");
-    meta.textContent = "Open for any officer to accept";
+    meta.textContent = swapStageLabel(item);
     li.append(requester, request, meta);
     if (canAcceptSwap(item)) {
       const accept = document.createElement("button");
@@ -708,6 +708,16 @@ function deriveSwapStatus(swap) {
   if (!swap.acceptingOfficer || !swap.takeDate || !swap.takeShift) return "Open";
   if (approvals.every((approval) => approval === "Approved")) return "Approved";
   return "Awaiting Approvals";
+}
+
+function swapStageLabel(swap) {
+  if (deriveSwapStatus(swap) === "Denied") return "Denied";
+  if (deriveSwapStatus(swap) === "Approved") return "Approved";
+  if (!swap.acceptingOfficer) return "Open";
+  if (!swap.takeDate || !swap.takeShift) return "Take Proposal Pending";
+  if (swap.requesterApproval === "Pending") return "Requester Review";
+  if (swap.requesterApproval === "Approved") return "Supervisor Review";
+  return deriveSwapStatus(swap);
 }
 
 function approvalSummary(swap) {
