@@ -37,6 +37,7 @@ let state = loadState();
 
 const els = {
   monthFilter: document.querySelector("#monthFilter"),
+  unitFilter: document.querySelector("#unitFilter"),
   searchFilter: document.querySelector("#searchFilter"),
   shiftRows: document.querySelector("#shiftRows"),
   overtimeRows: document.querySelector("#overtimeRows"),
@@ -51,6 +52,7 @@ const els = {
 };
 
 els.monthFilter.value = isoToday.slice(0, 7);
+populateUnitFilter();
 
 document.querySelectorAll(".tab").forEach((tab) => {
   tab.addEventListener("click", () => activateTab(tab.dataset.tab));
@@ -87,6 +89,10 @@ document.querySelector("#swapForm").addEventListener("submit", (event) => {
 });
 
 els.monthFilter.addEventListener("input", render);
+els.unitFilter.addEventListener("change", () => {
+  localStorage.setItem(`${STORAGE_KEY}-unit`, els.unitFilter.value);
+  render();
+});
 els.searchFilter.addEventListener("input", render);
 document.querySelector("#exportCsv").addEventListener("click", exportCsv);
 document.querySelector("#printView").addEventListener("click", () => window.print());
@@ -128,6 +134,7 @@ function saveForm(collection, form, fields) {
   form.elements.id.value = "";
   if (collection === "shifts") applyShiftHours(form);
   if (collection === "court") applyCourtTime(form);
+  populateUnitFilter();
   persist();
   render();
 }
@@ -152,6 +159,7 @@ function editRecord(collection, id) {
 
 function deleteRecord(collection, id) {
   state[collection] = state[collection].filter((item) => item.id !== id);
+  populateUnitFilter();
   persist();
   render();
 }
@@ -159,10 +167,10 @@ function deleteRecord(collection, id) {
 function render() {
   const filters = getFilters();
   normalizeShiftRecords();
-  const shifts = filterRecords(state.shifts, filters, ["date", "officer", "agency", "shift", "status", "notes"]);
-  const overtime = filterRecords(state.overtime, filters, ["date", "officer", "reason", "approval", "caseNumber"]);
-  const court = filterRecords(state.court, filters, ["date", "officer", "caseNumber", "court", "status", "notes"]);
-  const swaps = filterRecords(state.swaps, filters, ["giveDate", "takeDate", "requester", "covering", "giveShift", "takeShift", "status", "notes"]);
+  const shifts = filterRecords(state.shifts.filter((record) => isUnitRecord(record, filters.unit)), filters, ["date", "agency", "shift", "status", "notes"]);
+  const overtime = filterRecords(state.overtime.filter((record) => isUnitRecord(record, filters.unit)), filters, ["date", "reason", "approval", "caseNumber"]);
+  const court = filterRecords(state.court.filter((record) => isUnitRecord(record, filters.unit)), filters, ["date", "caseNumber", "court", "status", "notes"]);
+  const swaps = filterRecords(state.swaps.filter((record) => isUnitSwap(record, filters.unit)), filters, ["giveDate", "takeDate", "requester", "covering", "giveShift", "takeShift", "status", "notes"]);
 
   renderRows(els.shiftRows, shifts, (item) => [
     formatDate(item.date),
@@ -198,7 +206,7 @@ function render() {
   renderRows(els.swapRows, swaps, (item) => [
     formatDate(item.giveDate),
     item.requester,
-    item.covering,
+    item.covering || "-",
     item.giveShift || "-",
     item.takeDate ? `${formatDate(item.takeDate)} ${item.takeShift}` : "-",
     statusPill(item.status),
@@ -266,12 +274,12 @@ function statusPill(status) {
 function renderSummary(filters) {
   normalizeShiftRecords();
   const inMonth = (item) => itemMonth(primaryDate(item)) === filters.month;
-  const shiftHours = state.shifts.filter(inMonth).reduce((sum, shift) => sum + hoursBetween(shift.start, shift.end), 0);
-  const otHours = state.overtime.filter(inMonth).reduce((sum, ot) => sum + hoursBetween(ot.start, ot.end), 0);
-  const courtInMonth = state.court.filter(inMonth);
+  const shiftHours = state.shifts.filter((item) => inMonth(item) && isUnitRecord(item, filters.unit)).reduce((sum, shift) => sum + hoursBetween(shift.start, shift.end), 0);
+  const otHours = state.overtime.filter((item) => inMonth(item) && isUnitRecord(item, filters.unit)).reduce((sum, ot) => sum + hoursBetween(ot.start, ot.end), 0);
+  const courtInMonth = state.court.filter((item) => inMonth(item) && isUnitRecord(item, filters.unit));
   const courtHours = courtInMonth.reduce((sum, court) => sum + Number(court.duration || 0), 0);
   const courtCount = courtInMonth.length;
-  const swapCount = state.swaps.filter((swap) => itemMonth(swap.giveDate) === filters.month && swap.status === "Pending").length;
+  const swapCount = state.swaps.filter((swap) => itemMonth(swap.giveDate) === filters.month && swap.status === "Pending" && isUnitSwap(swap, filters.unit)).length;
 
   els.shiftHours.textContent = formatHours(shiftHours);
   els.overtimeHours.textContent = formatHours(otHours);
@@ -281,15 +289,14 @@ function renderSummary(filters) {
 }
 
 function renderActiveSwapRequests() {
-  const activeStatuses = new Set(["Pending", "Approved"]);
   const items = state.swaps
-    .filter((swap) => activeStatuses.has(swap.status))
+    .filter((swap) => swap.status === "Pending")
     .sort((a, b) => primaryDate(a).localeCompare(primaryDate(b)));
 
   els.activeSwapList.innerHTML = "";
   if (!items.length) {
     const li = document.createElement("li");
-    li.textContent = "No active shift swap requests.";
+    li.textContent = "No open shift swap requests.";
     els.activeSwapList.appendChild(li);
     return;
   }
@@ -318,8 +325,42 @@ function filterRecords(records, filters, fields) {
 function getFilters() {
   return {
     month: els.monthFilter.value,
+    unit: els.unitFilter.value,
     search: els.searchFilter.value.trim().toLowerCase()
   };
+}
+
+function populateUnitFilter() {
+  const current = els.unitFilter.value || localStorage.getItem(`${STORAGE_KEY}-unit`) || "";
+  const units = getUnitNames();
+  els.unitFilter.innerHTML = "";
+  units.forEach((unit) => {
+    const option = document.createElement("option");
+    option.value = unit;
+    option.textContent = unit;
+    els.unitFilter.appendChild(option);
+  });
+  els.unitFilter.value = units.includes(current) ? current : units[0] || "";
+}
+
+function getUnitNames() {
+  const names = new Set();
+  state.shifts.forEach((record) => record.officer && names.add(record.officer));
+  state.overtime.forEach((record) => record.officer && names.add(record.officer));
+  state.court.forEach((record) => record.officer && names.add(record.officer));
+  state.swaps.forEach((record) => {
+    if (record.requester) names.add(record.requester);
+    if (record.covering) names.add(record.covering);
+  });
+  return [...names].sort((a, b) => a.localeCompare(b));
+}
+
+function isUnitRecord(record, unit) {
+  return !unit || record.officer === unit;
+}
+
+function isUnitSwap(record, unit) {
+  return !unit || record.requester === unit || record.covering === unit;
 }
 
 function primaryDate(record) {

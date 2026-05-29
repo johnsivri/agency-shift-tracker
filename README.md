@@ -13,7 +13,8 @@ A small browser-based tracker for agency shift operations.
 - Traffic court hours are tracked separately from overtime hours
 - Court appearance tracking with case numbers, subpoena status, duration, and notes
 - Shift swap tracking with requester, covering officer, dates, status, and notes
-- Active shift swap request sidebar for pending and approved swaps
+- Patrol-unit scoped views for each unit's own shifts, OT, court, and swap information
+- Open shift swap request sidebar shared across patrol units
 - Month and search filters
 - CSV export and print view
 - Local browser storage

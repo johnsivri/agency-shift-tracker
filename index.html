@@ -26,8 +26,12 @@
           <input type="month" id="monthFilter" />
         </label>
         <label class="field">
+          <span>Patrol Unit</span>
+          <select id="unitFilter"></select>
+        </label>
+        <label class="field">
           <span>Search</span>
-          <input type="search" id="searchFilter" placeholder="Officer, case, notes" />
+          <input type="search" id="searchFilter" placeholder="Case, notes, status" />
         </label>
 
         <section class="quick-summary" aria-label="Monthly summary">
@@ -54,7 +58,7 @@
         </section>
 
         <section class="active-swaps">
-          <h2>Active Shift Swap Requests</h2>
+          <h2>Open Shift Swap Requests</h2>
           <ul id="activeSwapList"></ul>
         </section>
       </aside>
@@ -159,7 +163,7 @@
           <form id="swapForm" class="entry-form">
             <input type="hidden" name="id" />
             <label class="field"><span>Requester</span><input name="requester" required placeholder="Name" /></label>
-            <label class="field"><span>Covering Officer</span><input name="covering" required placeholder="Name" /></label>
+            <label class="field"><span>Covering Officer</span><input name="covering" placeholder="Optional until accepted" /></label>
             <label class="field"><span>Give Date</span><input type="date" name="giveDate" required /></label>
             <label class="field"><span>Give Shift</span><input name="giveShift" placeholder="0700-1500" /></label>
             <label class="field"><span>Take Date</span><input type="date" name="takeDate" /></label>
