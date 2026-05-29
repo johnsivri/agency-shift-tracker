@@ -35,10 +35,8 @@ const els = {
   monthFilter: document.querySelector("#monthFilter"),
   unitFilter: document.querySelector("#unitFilter"),
   searchFilter: document.querySelector("#searchFilter"),
-  shiftRows: document.querySelector("#shiftRows"),
   courtRows: document.querySelector("#courtRows"),
   swapRows: document.querySelector("#swapRows"),
-  shiftHours: document.querySelector("#shiftHours"),
   courtHours: document.querySelector("#courtHours"),
   courtCount: document.querySelector("#courtCount"),
   swapCount: document.querySelector("#swapCount"),
@@ -50,16 +48,6 @@ populateUnitFilter();
 
 document.querySelectorAll(".tab").forEach((tab) => {
   tab.addEventListener("click", () => activateTab(tab.dataset.tab));
-});
-
-document.querySelector("#shiftForm").elements.shift.addEventListener("change", (event) => {
-  applyShiftHours(event.currentTarget.form);
-});
-
-document.querySelector("#shiftForm").addEventListener("submit", (event) => {
-  event.preventDefault();
-  applyShiftHours(event.currentTarget);
-  saveForm("shifts", event.currentTarget, ["date", "officer", "agency", "shift", "start", "end", "status", "notes"]);
 });
 
 document.querySelector("#courtForm").elements.date.addEventListener("input", (event) => {
@@ -93,7 +81,6 @@ document.querySelector("#resetDemo").addEventListener("click", () => {
 });
 
 render();
-applyShiftHours(document.querySelector("#shiftForm"));
 applyCourtTime(document.querySelector("#courtForm"));
 
 function activateTab(name) {
@@ -121,7 +108,6 @@ function saveForm(collection, form, fields) {
 
   form.reset();
   form.elements.id.value = "";
-  if (collection === "shifts") applyShiftHours(form);
   if (collection === "court") applyCourtTime(form);
   populateUnitFilter();
   persist();
@@ -141,7 +127,6 @@ function editRecord(collection, id) {
       form.elements[key].value = value;
     }
   });
-  if (collection === "shifts") applyShiftHours(form);
   if (collection === "court") applyCourtTime(form);
   form.scrollIntoView({ behavior: "smooth", block: "center" });
 }
@@ -156,20 +141,8 @@ function deleteRecord(collection, id) {
 function render() {
   const filters = getFilters();
   normalizeShiftRecords();
-  const shifts = filterRecords(state.shifts.filter((record) => isUnitRecord(record, filters.unit)), filters, ["date", "agency", "shift", "status", "notes"]);
   const court = filterRecords(state.court.filter((record) => isUnitRecord(record, filters.unit)), filters, ["date", "caseNumber", "court", "status", "notes"]);
   const swaps = filterRecords(state.swaps.filter((record) => isUnitSwap(record, filters.unit)), filters, ["giveDate", "takeDate", "requester", "covering", "giveShift", "takeShift", "status", "notes"]);
-
-  renderRows(els.shiftRows, shifts, (item) => [
-    formatDate(item.date),
-    item.officer,
-    item.agency || "-",
-    `${item.shift} shift`,
-    `${formatMilitaryTime(item.start)} - ${formatMilitaryTime(item.end)}`,
-    formatHours(hoursBetween(item.start, item.end)),
-    statusPill(item.status),
-    rowActions("shifts", item.id)
-  ]);
 
   renderRows(els.courtRows, court, (item) => [
     formatDate(item.date),
@@ -252,13 +225,11 @@ function statusPill(status) {
 function renderSummary(filters) {
   normalizeShiftRecords();
   const inMonth = (item) => itemMonth(primaryDate(item)) === filters.month;
-  const shiftHours = state.shifts.filter((item) => inMonth(item) && isUnitRecord(item, filters.unit)).reduce((sum, shift) => sum + hoursBetween(shift.start, shift.end), 0);
   const courtInMonth = state.court.filter((item) => inMonth(item) && isUnitRecord(item, filters.unit));
   const courtHours = courtInMonth.reduce((sum, court) => sum + Number(court.duration || 0), 0);
   const courtCount = courtInMonth.length;
   const swapCount = state.swaps.filter((swap) => itemMonth(swap.giveDate) === filters.month && swap.status === "Pending" && isUnitSwap(swap, filters.unit)).length;
 
-  els.shiftHours.textContent = formatHours(shiftHours);
   els.courtHours.textContent = formatHours(courtHours);
   els.courtCount.textContent = courtCount;
   els.swapCount.textContent = swapCount;
@@ -350,13 +321,6 @@ function itemMonth(value) {
   return String(value || "").slice(0, 7);
 }
 
-function applyShiftHours(form) {
-  const shift = form.elements.shift.value || "A";
-  const definition = SHIFT_DEFINITIONS[shift] || SHIFT_DEFINITIONS.A;
-  form.elements.start.value = definition.start;
-  form.elements.end.value = definition.end;
-}
-
 function normalizeShiftRecords() {
   state.shifts.forEach((shift) => {
     shift.shift = shift.shift || inferShiftName(shift.start, shift.end);
@@ -399,20 +363,6 @@ function findNextCourtDate(value) {
     date.setDate(date.getDate() + 1);
   }
   return value;
-}
-
-function hoursBetween(start, end) {
-  if (!start || !end) return 0;
-  const [startHours, startMinutes] = start.split(":").map(Number);
-  const [endHours, endMinutes] = end.split(":").map(Number);
-  let startTotal = startHours * 60 + startMinutes;
-  let endTotal = endHours * 60 + endMinutes;
-  if (endTotal < startTotal) endTotal += 24 * 60;
-  return (endTotal - startTotal) / 60;
-}
-
-function formatMilitaryTime(value) {
-  return String(value || "").replace(":", "");
 }
 
 function formatHours(value) {

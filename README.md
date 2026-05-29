@@ -4,7 +4,7 @@ A small browser-based tracker for agency shift operations.
 
 ## Features
 
-- Shift log with hour totals
+- Hidden patrol shift data for shift swap context
 - Fixed A/B/C/D shift assignments
 - A and B shifts run 0600-1800
 - C and D shifts run 1800-0600
