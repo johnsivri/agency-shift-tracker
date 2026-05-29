@@ -21,6 +21,18 @@
 
     <main class="app-shell">
       <aside class="sidebar" aria-label="Filters and summary">
+        <section class="auth-panel" aria-label="Account access">
+          <h2>Secure Access</h2>
+          <p id="authState">Local demo mode</p>
+          <form id="authForm" class="auth-form">
+            <label class="field"><span>Email</span><input type="email" name="email" autocomplete="username" placeholder="officer@agency.gov" /></label>
+            <label class="field"><span>Password</span><input type="password" name="password" autocomplete="current-password" placeholder="Password" /></label>
+            <div class="auth-actions">
+              <button class="primary" type="submit">Sign In</button>
+              <button class="ghost" type="button" id="signOut">Sign Out</button>
+            </div>
+          </form>
+        </section>
         <label class="field">
           <span>Month</span>
           <input type="month" id="monthFilter" />
@@ -87,6 +99,7 @@
               <tbody id="courtRows"></tbody>
             </table>
           </div>
+          <div class="mobile-list" id="courtCards"></div>
         </section>
 
         <section class="panel" id="tab-swaps">
@@ -116,10 +129,13 @@
               <tbody id="swapRows"></tbody>
             </table>
           </div>
+          <div class="mobile-list" id="swapCards"></div>
         </section>
       </section>
     </main>
 
+    <script src="app-config.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="app.js"></script>
   </body>
 </html>

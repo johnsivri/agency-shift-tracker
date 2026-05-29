@@ -30,13 +30,20 @@ const seedData = {
 };
 
 let state = loadState();
+let authUser = null;
+let supabaseClient = createSupabaseClient();
 
 const els = {
+  authForm: document.querySelector("#authForm"),
+  authState: document.querySelector("#authState"),
+  signOut: document.querySelector("#signOut"),
   monthFilter: document.querySelector("#monthFilter"),
   unitFilter: document.querySelector("#unitFilter"),
   searchFilter: document.querySelector("#searchFilter"),
   courtRows: document.querySelector("#courtRows"),
+  courtCards: document.querySelector("#courtCards"),
   swapRows: document.querySelector("#swapRows"),
+  swapCards: document.querySelector("#swapCards"),
   courtHours: document.querySelector("#courtHours"),
   courtCount: document.querySelector("#courtCount"),
   swapCount: document.querySelector("#swapCount"),
@@ -49,6 +56,15 @@ populateUnitFilter();
 document.querySelectorAll(".tab").forEach((tab) => {
   tab.addEventListener("click", () => activateTab(tab.dataset.tab));
 });
+
+els.authForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  await signIn(form.elements.email.value, form.elements.password.value);
+  form.elements.password.value = "";
+});
+
+els.signOut.addEventListener("click", signOut);
 
 document.querySelector("#courtForm").elements.date.addEventListener("input", (event) => {
   applyCourtTime(event.currentTarget.form);
@@ -80,8 +96,21 @@ document.querySelector("#resetDemo").addEventListener("click", () => {
   render();
 });
 
-render();
+initializeApp();
 applyCourtTime(document.querySelector("#courtForm"));
+
+async function initializeApp() {
+  if (supabaseClient) {
+    const { data } = await supabaseClient.auth.getUser();
+    authUser = data.user || null;
+    supabaseClient.auth.onAuthStateChange((_event, session) => {
+      authUser = session?.user || null;
+      updateAuthState();
+    });
+  }
+  updateAuthState();
+  render();
+}
 
 function activateTab(name) {
   document.querySelectorAll(".tab").forEach((tab) => tab.classList.toggle("is-active", tab.dataset.tab === name));
@@ -156,6 +185,7 @@ function render() {
     item.duration ? `${Number(item.duration).toFixed(2)}h` : "-",
     rowActions("court", item.id)
   ], 7);
+  renderCourtCards(court);
 
   renderRows(els.swapRows, swaps, (item) => [
     formatDate(item.giveDate),
@@ -167,9 +197,59 @@ function render() {
     statusPill(item.status),
     rowActions("swaps", item.id)
   ], 8);
+  renderSwapCards(swaps);
 
   renderSummary(filters);
   renderActiveSwapRequests();
+}
+
+function renderCourtCards(court) {
+  els.courtCards.innerHTML = "";
+  if (!court.length) {
+    els.courtCards.appendChild(emptyCard("No matching court records."));
+    return;
+  }
+  court.sort(sortByPrimaryDate).forEach((item) => {
+    const card = document.createElement("article");
+    card.className = "mobile-card";
+    const title = document.createElement("h3");
+    title.textContent = `${formatDate(item.date)} - ${item.caseNumber}`;
+    const details = document.createElement("p");
+    details.textContent = `${item.officer} - ${item.court || "Court"} - ${item.status}`;
+    const hours = document.createElement("p");
+    hours.textContent = `Court hours: ${item.duration ? `${Number(item.duration).toFixed(2)}h` : "-"}`;
+    card.append(title, details, hours, rowActions("court", item.id));
+    els.courtCards.appendChild(card);
+  });
+}
+
+function renderSwapCards(swaps) {
+  els.swapCards.innerHTML = "";
+  if (!swaps.length) {
+    els.swapCards.appendChild(emptyCard("No matching swap records."));
+    return;
+  }
+  swaps.sort(sortByPrimaryDate).forEach((item) => {
+    const card = document.createElement("article");
+    card.className = "mobile-card";
+    const title = document.createElement("h3");
+    title.textContent = `${formatDate(item.giveDate)} - ${item.status}`;
+    const officers = document.createElement("p");
+    officers.textContent = `${item.requester} -> ${item.acceptingOfficer || "Open"}`;
+    const details = document.createElement("p");
+    details.textContent = `Give: ${item.giveShift || "-"} | Take: ${item.takeDate ? `${formatDate(item.takeDate)} ${item.takeShift || ""}` : "-"}`;
+    const approvals = document.createElement("p");
+    approvals.textContent = approvalSummary(item);
+    card.append(title, officers, details, approvals, rowActions("swaps", item.id));
+    els.swapCards.appendChild(card);
+  });
+}
+
+function emptyCard(message) {
+  const card = document.createElement("article");
+  card.className = "mobile-card";
+  card.textContent = message;
+  return card;
 }
 
 function renderRows(target, rows, mapRow, colSpan = 7) {
@@ -476,4 +556,45 @@ function exportCsv() {
   link.download = `agency-shift-tracker-${isoToday}.csv`;
   link.click();
   URL.revokeObjectURL(url);
+}
+
+function createSupabaseClient() {
+  const config = window.APP_CONFIG || {};
+  if (!config.supabaseUrl || !config.supabaseAnonKey || !window.supabase) return null;
+  return window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true
+    }
+  });
+}
+
+async function signIn(email, password) {
+  if (!supabaseClient) {
+    els.authState.textContent = "Add Supabase URL and anon key in app-config.js to enable login.";
+    return;
+  }
+  const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+  if (error) {
+    els.authState.textContent = `Sign in failed: ${error.message}`;
+    return;
+  }
+  authUser = data.user;
+  updateAuthState();
+}
+
+async function signOut() {
+  if (!supabaseClient) return;
+  await supabaseClient.auth.signOut();
+  authUser = null;
+  updateAuthState();
+}
+
+function updateAuthState() {
+  if (!supabaseClient) {
+    els.authState.textContent = "Local demo mode - Supabase not configured";
+    return;
+  }
+  els.authState.textContent = authUser ? `Signed in as ${authUser.email}` : "Supabase ready - sign in required for shared data";
 }

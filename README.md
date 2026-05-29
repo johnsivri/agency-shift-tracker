@@ -16,8 +16,22 @@ A small browser-based tracker for agency shift operations.
 - Patrol-unit scoped views for each unit's own shifts, court, and swap information
 - Open shift swap request sidebar shared across patrol units
 - Month and search filters
+- Supabase-ready secure access panel
+- Mobile card views for court and shift swap records
 - CSV export and print view
 - Local browser storage
+
+## Supabase Setup
+
+1. Create a Supabase project.
+2. Run `supabase/schema.sql` in the Supabase SQL editor.
+3. Add officer, supervisor, and admin users in Supabase Auth.
+4. Add matching rows in `public.profiles`.
+5. Add your project URL and anon key to `app-config.js`.
+
+The app will remain in local demo mode until `app-config.js` has Supabase values.
+
+Security notes and RLS expectations are in `SECURITY.md`.
 
 ## Run Locally
 

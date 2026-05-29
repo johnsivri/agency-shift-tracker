@@ -188,16 +188,39 @@ button:focus-visible {
 
 .quick-summary {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
 
 .quick-summary div,
+.auth-panel,
 .active-swaps,
 .panel {
   background: rgba(255, 255, 255, 0.92);
   border: 1px solid var(--line);
   box-shadow: var(--shadow);
+}
+
+.auth-panel {
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.auth-panel p {
+  color: var(--muted);
+  font-size: 0.86rem;
+  margin-bottom: 12px;
+}
+
+.auth-form {
+  display: grid;
+  gap: 10px;
+}
+
+.auth-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
 }
 
 .quick-summary div {
@@ -315,6 +338,35 @@ table {
   min-width: 760px;
 }
 
+.mobile-list {
+  display: none;
+  gap: 10px;
+  padding: 12px;
+}
+
+.mobile-card {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.mobile-card h3 {
+  font-size: 1rem;
+  margin: 0 0 6px;
+}
+
+.mobile-card p {
+  color: var(--muted);
+  font-size: 0.86rem;
+  margin: 0 0 8px;
+}
+
+.mobile-card .row-actions {
+  justify-content: flex-start;
+  margin-top: 10px;
+}
+
 th,
 td {
   padding: 13px 14px;
@@ -391,7 +443,11 @@ tbody tr:hover {
 
   .quick-summary {
     grid-column: span 2;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .auth-panel {
+    grid-column: span 2;
   }
 
   .active-swaps {
@@ -404,6 +460,10 @@ tbody tr:hover {
 }
 
 @media (max-width: 640px) {
+  body {
+    background: #f8faf7;
+  }
+
   .topbar {
     align-items: flex-start;
     flex-direction: column;
@@ -424,10 +484,35 @@ tbody tr:hover {
     grid-template-columns: 1fr;
   }
 
+  .auth-actions {
+    grid-template-columns: 1fr;
+  }
+
   .quick-summary,
+  .auth-panel,
   .active-swaps,
   .wide {
     grid-column: auto;
+  }
+
+  .tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .tab,
+  .primary,
+  .ghost,
+  .icon-button {
+    min-height: 44px;
+  }
+
+  .table-wrap {
+    display: none;
+  }
+
+  .mobile-list {
+    display: grid;
   }
 
   .panel-heading {
