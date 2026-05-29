@@ -21,10 +21,6 @@ const seedData = {
     { id: uid(), date: isoToday, officer: "Jordan Lee", agency: "North Precinct", shift: "A", start: "06:00", end: "18:00", status: "Worked", notes: "Zone 2" },
     { id: uid(), date: tomorrow, officer: "M. Alvarez", agency: "Court Services", shift: "B", start: "06:00", end: "18:00", status: "Scheduled", notes: "" }
   ],
-  overtime: [
-    { id: uid(), date: isoToday, officer: "Jordan Lee", start: "15:00", end: "18:30", reason: "Holdover", approval: "Pending", caseNumber: "", courtRelated: false },
-    { id: uid(), date: tomorrow, officer: "Dana Price", start: "09:00", end: "11:00", reason: "Court", approval: "Approved", caseNumber: "26-1842", courtRelated: true }
-  ],
   court: [
     { id: uid(), date: nextCourtDate, officer: "Dana Price", caseNumber: "26-1842", court: "District 4", time: courtTimeForDate(nextCourtDate), duration: "2", status: "Scheduled", subpoena: true, notes: "Bring body cam notes" }
   ],
@@ -40,11 +36,9 @@ const els = {
   unitFilter: document.querySelector("#unitFilter"),
   searchFilter: document.querySelector("#searchFilter"),
   shiftRows: document.querySelector("#shiftRows"),
-  overtimeRows: document.querySelector("#overtimeRows"),
   courtRows: document.querySelector("#courtRows"),
   swapRows: document.querySelector("#swapRows"),
   shiftHours: document.querySelector("#shiftHours"),
-  overtimeHours: document.querySelector("#overtimeHours"),
   courtHours: document.querySelector("#courtHours"),
   courtCount: document.querySelector("#courtCount"),
   swapCount: document.querySelector("#swapCount"),
@@ -66,11 +60,6 @@ document.querySelector("#shiftForm").addEventListener("submit", (event) => {
   event.preventDefault();
   applyShiftHours(event.currentTarget);
   saveForm("shifts", event.currentTarget, ["date", "officer", "agency", "shift", "start", "end", "status", "notes"]);
-});
-
-document.querySelector("#overtimeForm").addEventListener("submit", (event) => {
-  event.preventDefault();
-  saveForm("overtime", event.currentTarget, ["date", "officer", "start", "end", "reason", "approval", "caseNumber", "courtRelated"]);
 });
 
 document.querySelector("#courtForm").elements.date.addEventListener("input", (event) => {
@@ -168,7 +157,6 @@ function render() {
   const filters = getFilters();
   normalizeShiftRecords();
   const shifts = filterRecords(state.shifts.filter((record) => isUnitRecord(record, filters.unit)), filters, ["date", "agency", "shift", "status", "notes"]);
-  const overtime = filterRecords(state.overtime.filter((record) => isUnitRecord(record, filters.unit)), filters, ["date", "reason", "approval", "caseNumber"]);
   const court = filterRecords(state.court.filter((record) => isUnitRecord(record, filters.unit)), filters, ["date", "caseNumber", "court", "status", "notes"]);
   const swaps = filterRecords(state.swaps.filter((record) => isUnitSwap(record, filters.unit)), filters, ["giveDate", "takeDate", "requester", "covering", "giveShift", "takeShift", "status", "notes"]);
 
@@ -181,16 +169,6 @@ function render() {
     formatHours(hoursBetween(item.start, item.end)),
     statusPill(item.status),
     rowActions("shifts", item.id)
-  ]);
-
-  renderRows(els.overtimeRows, overtime, (item) => [
-    formatDate(item.date),
-    item.officer,
-    item.courtRelated ? `${item.reason} / court` : item.reason,
-    `${item.start} - ${item.end}`,
-    formatHours(hoursBetween(item.start, item.end)),
-    statusPill(item.approval),
-    rowActions("overtime", item.id)
   ]);
 
   renderRows(els.courtRows, court, (item) => [
@@ -275,14 +253,12 @@ function renderSummary(filters) {
   normalizeShiftRecords();
   const inMonth = (item) => itemMonth(primaryDate(item)) === filters.month;
   const shiftHours = state.shifts.filter((item) => inMonth(item) && isUnitRecord(item, filters.unit)).reduce((sum, shift) => sum + hoursBetween(shift.start, shift.end), 0);
-  const otHours = state.overtime.filter((item) => inMonth(item) && isUnitRecord(item, filters.unit)).reduce((sum, ot) => sum + hoursBetween(ot.start, ot.end), 0);
   const courtInMonth = state.court.filter((item) => inMonth(item) && isUnitRecord(item, filters.unit));
   const courtHours = courtInMonth.reduce((sum, court) => sum + Number(court.duration || 0), 0);
   const courtCount = courtInMonth.length;
   const swapCount = state.swaps.filter((swap) => itemMonth(swap.giveDate) === filters.month && swap.status === "Pending" && isUnitSwap(swap, filters.unit)).length;
 
   els.shiftHours.textContent = formatHours(shiftHours);
-  els.overtimeHours.textContent = formatHours(otHours);
   els.courtHours.textContent = formatHours(courtHours);
   els.courtCount.textContent = courtCount;
   els.swapCount.textContent = swapCount;
@@ -346,7 +322,6 @@ function populateUnitFilter() {
 function getUnitNames() {
   const names = new Set();
   state.shifts.forEach((record) => record.officer && names.add(record.officer));
-  state.overtime.forEach((record) => record.officer && names.add(record.officer));
   state.court.forEach((record) => record.officer && names.add(record.officer));
   state.swaps.forEach((record) => {
     if (record.requester) names.add(record.requester);
@@ -484,7 +459,6 @@ function persist() {
 function exportCsv() {
   const sections = [
     ["shifts", state.shifts],
-    ["overtime", state.overtime],
     ["court", state.court],
     ["swaps", state.swaps]
   ];

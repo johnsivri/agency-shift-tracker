@@ -40,10 +40,6 @@
             <span class="label">Shift hours</span>
           </div>
           <div>
-            <span class="metric" id="overtimeHours">0</span>
-            <span class="label">OT hours</span>
-          </div>
-          <div>
             <span class="metric" id="courtHours">0</span>
             <span class="label">Court hours</span>
           </div>
@@ -66,7 +62,6 @@
       <section class="workspace">
         <nav class="tabs" aria-label="Tracker sections">
           <button class="tab is-active" data-tab="shifts">Shifts</button>
-          <button class="tab" data-tab="overtime">Overtime</button>
           <button class="tab" data-tab="court">Court</button>
           <button class="tab" data-tab="swaps">Swaps</button>
         </nav>
@@ -94,33 +89,6 @@
             <table>
               <thead><tr><th>Date</th><th>Officer</th><th>Agency</th><th>Shift</th><th>Time</th><th>Hours</th><th>Status</th><th></th></tr></thead>
               <tbody id="shiftRows"></tbody>
-            </table>
-          </div>
-        </section>
-
-        <section class="panel" id="tab-overtime">
-          <div class="panel-heading">
-            <div>
-              <h2>Overtime</h2>
-              <p>Log overtime separately from traffic court appearance hours.</p>
-            </div>
-          </div>
-          <form id="overtimeForm" class="entry-form">
-            <input type="hidden" name="id" />
-            <label class="field"><span>Date</span><input type="date" name="date" required /></label>
-            <label class="field"><span>Officer</span><input name="officer" required placeholder="Name" /></label>
-            <label class="field"><span>Start</span><input type="time" name="start" required /></label>
-            <label class="field"><span>End</span><input type="time" name="end" required /></label>
-            <label class="field"><span>Reason</span><select name="reason"><option>Holdover</option><option>Call-in</option><option>Court</option><option>Special detail</option><option>Training</option></select></label>
-            <label class="field"><span>Approval</span><select name="approval"><option>Pending</option><option>Approved</option><option>Denied</option></select></label>
-            <label class="field"><span>Case No.</span><input name="caseNumber" placeholder="Optional" /></label>
-            <label class="check-field"><input type="checkbox" name="courtRelated" /> Court related</label>
-            <button class="primary" type="submit">Save OT</button>
-          </form>
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>Date</th><th>Officer</th><th>Reason</th><th>Time</th><th>Hours</th><th>Approval</th><th></th></tr></thead>
-              <tbody id="overtimeRows"></tbody>
             </table>
           </div>
         </section>
