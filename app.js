@@ -174,7 +174,11 @@ async function saveForm(collection, form, fields) {
   });
 
   item.id = form.elements.id.value || uid();
-  if (collection === "swaps") applySwapWorkflowState(item);
+  if (collection === "swaps") {
+    const validSwap = validateSwapDetails(item);
+    if (!validSwap) return;
+    applySwapWorkflowState(item);
+  }
 
   if (isRemoteMode()) {
     setStatus("Saving shared data...");
@@ -196,6 +200,10 @@ async function saveForm(collection, form, fields) {
   form.reset();
   form.elements.id.value = "";
   if (collection === "court") applyCourtTime(form);
+  if (collection === "swaps") {
+    form.elements.takeDate.required = false;
+    form.elements.takeShift.required = false;
+  }
 }
 
 function editRecord(collection, id) {
@@ -252,21 +260,31 @@ async function acceptSwap(id) {
     return;
   }
 
+  editRecord("swaps", id);
+  const form = document.querySelector("#swapForm");
+  form.elements.acceptingOfficer.value = currentProfile.display_name;
+  form.elements.takeDate.required = true;
+  form.elements.takeShift.required = true;
+  setStatus("Enter the take date and take shift to propose an equal-hours swap.");
+}
+
+async function decideRequesterApproval(id, decision) {
+  const swap = state.swaps.find((item) => item.id === id);
+  if (!swap || !canRequesterDecideSwap(swap)) {
+    setStatus("Only the requesting officer can approve or deny this proposal.");
+    return;
+  }
   const updated = {
     ...swap,
-    acceptingOfficer: currentProfile.display_name,
-    acceptingOfficerId: currentProfile.id,
-    requesterApproval: swap.requesterApproval || "Pending",
-    requesterSupervisorApproval: swap.requesterSupervisorApproval || "Pending",
-    acceptingSupervisorApproval: "Pending"
+    requesterApproval: decision
   };
   updated.status = deriveSwapStatus(updated);
 
   if (isRemoteMode()) {
-    setStatus("Accepting shift swap...");
+    setStatus(`${decision} requester decision...`);
     const saved = await saveSupabaseSwap(updated);
     if (!saved) return;
-    await loadSupabaseState("Shift swap accepted. Supervisor approvals are now pending.");
+    await loadSupabaseState(`Swap proposal ${decision.toLowerCase()}.`);
     return;
   }
 
@@ -401,6 +419,19 @@ function rowActions(collection, id, item = null) {
     accept.textContent = "Accept";
     accept.addEventListener("click", () => acceptSwap(id));
     wrapper.appendChild(accept);
+  }
+  if (collection === "swaps" && canRequesterDecideSwap(item)) {
+    const approve = document.createElement("button");
+    approve.type = "button";
+    approve.className = "primary compact";
+    approve.textContent = "Approve";
+    approve.addEventListener("click", () => decideRequesterApproval(id, "Approved"));
+    const deny = document.createElement("button");
+    deny.type = "button";
+    deny.className = "ghost compact";
+    deny.textContent = "Deny";
+    deny.addEventListener("click", () => decideRequesterApproval(id, "Denied"));
+    wrapper.append(approve, deny);
   }
   const edit = document.createElement("button");
   edit.type = "button";
@@ -587,10 +618,42 @@ function applySwapWorkflowState(item) {
   item.status = deriveSwapStatus(item);
 }
 
+function validateSwapDetails(item) {
+  if (!item.acceptingOfficer && (item.takeDate || item.takeShift)) {
+    setStatus("Choose an accepting officer before adding take details.");
+    return false;
+  }
+  if (item.acceptingOfficer && (!item.takeDate || !item.takeShift)) {
+    setStatus("Accepting officers must enter both the take date and take shift.");
+    return false;
+  }
+  if (item.takeDate && !item.takeShift) {
+    setStatus("Enter a take shift or leave the take date blank.");
+    return false;
+  }
+  if (item.takeShift && !item.takeDate) {
+    setStatus("Enter a take date or leave the take shift blank.");
+    return false;
+  }
+  if (item.takeDate && item.takeShift) {
+    const giveHours = shiftHours(item.giveShift);
+    const takeHours = shiftHours(item.takeShift);
+    if (!giveHours || !takeHours) {
+      setStatus("Use a shift value with times, such as A shift 0600-1800.");
+      return false;
+    }
+    if (giveHours !== takeHours) {
+      setStatus(`Swap hours must match. Give is ${formatHours(giveHours)}h and take is ${formatHours(takeHours)}h.`);
+      return false;
+    }
+  }
+  return true;
+}
+
 function deriveSwapStatus(swap) {
   const approvals = [swap.requesterApproval, swap.requesterSupervisorApproval, swap.acceptingSupervisorApproval];
   if (approvals.includes("Denied")) return "Denied";
-  if (!swap.acceptingOfficer) return "Open";
+  if (!swap.acceptingOfficer || !swap.takeDate || !swap.takeShift) return "Open";
   if (approvals.every((approval) => approval === "Approved")) return "Approved";
   return "Awaiting Approvals";
 }
@@ -622,6 +685,18 @@ function canAcceptSwap(swap) {
     && currentProfile.role === "officer"
     && isOpenSwap(swap)
     && swap.requester !== currentProfile.display_name
+  );
+}
+
+function canRequesterDecideSwap(swap) {
+  return Boolean(
+    swap
+    && currentProfile
+    && swap.requester === currentProfile.display_name
+    && swap.acceptingOfficer
+    && swap.takeDate
+    && swap.takeShift
+    && swap.requesterApproval === "Pending"
   );
 }
 
@@ -684,6 +759,40 @@ function findNextCourtDate(value) {
 function formatHours(value) {
   const rounded = Math.round(value * 100) / 100;
   return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2);
+}
+
+function shiftHours(value) {
+  const normalized = String(value || "").toUpperCase();
+  const shiftMatch = normalized.match(/\b([ABCD])\b/);
+  if (shiftMatch && SHIFT_DEFINITIONS[shiftMatch[1]]) {
+    const definition = SHIFT_DEFINITIONS[shiftMatch[1]];
+    return hoursBetween(definition.start, definition.end);
+  }
+  const timeMatch = normalized.match(/(\d{1,2}:?\d{2})\s*(?:-|TO)\s*(\d{1,2}:?\d{2})/);
+  if (!timeMatch) return 0;
+  return hoursBetween(normalizeTimeToken(timeMatch[1]), normalizeTimeToken(timeMatch[2]));
+}
+
+function normalizeTimeToken(value) {
+  const digits = String(value || "").replace(/\D/g, "").padStart(4, "0").slice(-4);
+  return `${digits.slice(0, 2)}:${digits.slice(2)}`;
+}
+
+function hoursBetween(start, end) {
+  const startMinutes = minutesFromTime(start);
+  let endMinutes = minutesFromTime(end);
+  if (startMinutes < 0 || endMinutes < 0) return 0;
+  if (endMinutes <= startMinutes) endMinutes += 24 * 60;
+  return (endMinutes - startMinutes) / 60;
+}
+
+function minutesFromTime(value) {
+  const match = String(value || "").match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return -1;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours > 23 || minutes > 59) return -1;
+  return hours * 60 + minutes;
 }
 
 function formatDate(value) {
