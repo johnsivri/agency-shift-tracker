@@ -6,8 +6,8 @@ A small browser-based tracker for agency shift operations.
 
 - Shift log with hour totals
 - Fixed A/B/C/D shift assignments
-- A and C shifts run 0600-1800
-- B and D shifts run 1800-0600
+- A and B shifts run 0600-1800
+- C and D shifts run 1800-0600
 - Overtime tracking with approval status and court-related flags
 - Court appearance tracking with case numbers, subpoena status, duration, and notes
 - Shift swap tracking with requester, covering officer, dates, status, and notes

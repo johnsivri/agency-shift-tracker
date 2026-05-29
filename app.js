@@ -6,15 +6,15 @@ const tomorrow = addDays(isoToday, 1);
 const nextWeek = addDays(isoToday, 6);
 const SHIFT_DEFINITIONS = {
   A: { start: "06:00", end: "18:00", label: "A" },
-  B: { start: "18:00", end: "06:00", label: "B" },
-  C: { start: "06:00", end: "18:00", label: "C" },
+  B: { start: "06:00", end: "18:00", label: "B" },
+  C: { start: "18:00", end: "06:00", label: "C" },
   D: { start: "18:00", end: "06:00", label: "D" }
 };
 
 const seedData = {
   shifts: [
     { id: uid(), date: isoToday, officer: "Jordan Lee", agency: "North Precinct", shift: "A", start: "06:00", end: "18:00", status: "Worked", notes: "Zone 2" },
-    { id: uid(), date: tomorrow, officer: "M. Alvarez", agency: "Court Services", shift: "B", start: "18:00", end: "06:00", status: "Scheduled", notes: "" }
+    { id: uid(), date: tomorrow, officer: "M. Alvarez", agency: "Court Services", shift: "B", start: "06:00", end: "18:00", status: "Scheduled", notes: "" }
   ],
   overtime: [
     { id: uid(), date: isoToday, officer: "Jordan Lee", start: "15:00", end: "18:30", reason: "Holdover", approval: "Pending", caseNumber: "", courtRelated: false },
