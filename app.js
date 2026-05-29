@@ -175,6 +175,7 @@ async function saveForm(collection, form, fields) {
 
   item.id = form.elements.id.value || uid();
   if (collection === "swaps") {
+    if (currentProfile?.role === "officer") item.requester = currentProfile.display_name;
     const validSwap = validateSwapDetails(item);
     if (!validSwap) return;
     applySwapWorkflowState(item);
@@ -1240,8 +1241,14 @@ async function saveSupabaseCourt(item) {
 }
 
 async function saveSupabaseSwap(item) {
-  const requesterId = profileIdByName(item.requester) || currentProfile?.id;
+  const requesterId = currentProfile?.role === "officer"
+    ? currentProfile.id
+    : profileIdByName(item.requester) || currentProfile?.id;
   const acceptingOfficerId = profileIdByName(item.acceptingOfficer);
+  if (!requesterId) {
+    setStatus("Swap save failed: signed-in profile could not be matched to a requester.");
+    return false;
+  }
   const payload = {
     requesting_officer_id: requesterId,
     accepting_officer_id: acceptingOfficerId || null,
