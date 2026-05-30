@@ -177,6 +177,10 @@ async function saveForm(collection, form, fields) {
   });
 
   item.id = form.elements.id.value || uid();
+  if (collection === "court" && !canManageCourtRecord(item)) {
+    setStatus("Court save failed: only admins or the officer's assigned supervisor can save court records.");
+    return;
+  }
   if (collection === "swaps") {
     if (currentProfile?.role === "officer") item.requester = currentProfile.display_name;
     const validSwap = validateSwapDetails(item);
@@ -229,9 +233,9 @@ async function importCourtRows(event) {
     return;
   }
 
-  const invalid = records.find((record) => !courtTimeForDate(record.date) || !profileIdByName(record.officer));
+  const invalid = records.find((record) => !courtTimeForDate(record.date) || !profileIdByName(record.officer) || !canManageCourtRecord(record));
   if (invalid) {
-    setStatus(`Court import failed: check date/officer for ${invalid.caseNumber || "one row"}.`);
+    setStatus(`Court import failed: check date, officer, or supervisor assignment for ${invalid.caseNumber || "one row"}.`);
     return;
   }
 
@@ -836,6 +840,12 @@ function canDeleteRecord(collection, record) {
     return record.requester === currentProfile.display_name && !record.acceptingOfficer;
   }
   return false;
+}
+
+function canManageCourtRecord(record) {
+  if (!record || !currentProfile) return false;
+  if (currentProfile.role === "admin") return true;
+  return currentProfile.role === "supervisor" && isSupervisorForName(record.officer);
 }
 
 function supervisorDecisionActions(swap) {
