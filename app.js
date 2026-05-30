@@ -388,7 +388,7 @@ function render() {
   const filters = getFilters();
   normalizeShiftRecords();
   normalizeSwapRecords();
-  const court = filterRecords(state.court.filter((record) => isUnitRecord(record, filters.unit)), filters, ["date", "caseNumber", "court", "status", "notes"]);
+  const court = filterCourtRecords(state.court.filter((record) => isUnitRecord(record, filters.unit)), filters);
   const swaps = filterSwapRecords(state.swaps.filter((record) => isVisibleSwap(record, filters.unit)), filters);
 
   renderRows(els.courtRows, court, (item) => [
@@ -399,7 +399,7 @@ function render() {
     statusPill(item.status),
     item.duration ? `${Number(item.duration).toFixed(2)}h` : "-",
     rowActions("court", item.id, item)
-  ], 7);
+  ], 7, "No matching court records. Upcoming scheduled court remains visible regardless of month.");
   renderCourtCards(court);
 
   renderRows(els.swapRows, swaps, (item) => [
@@ -628,6 +628,16 @@ function filterRecords(records, filters, fields) {
   });
 }
 
+function filterCourtRecords(records, filters) {
+  const searchableFields = ["date", "caseNumber", "court", "status", "notes"];
+  return records.filter((record) => {
+    const monthMatch = itemMonth(primaryDate(record)) === filters.month;
+    const upcomingScheduled = isUpcomingCourt(record);
+    const textMatch = !filters.search || searchableFields.some((field) => String(record[field] || "").toLowerCase().includes(filters.search));
+    return (monthMatch || upcomingScheduled) && textMatch;
+  });
+}
+
 function filterSwapRecords(records, filters) {
   const searchableFields = ["giveDate", "takeDate", "requester", "acceptingOfficer", "giveShift", "takeShift", "status", "notes"];
   return records.filter((record) => {
@@ -789,6 +799,11 @@ function isOpenSwap(swap) {
 
 function isActiveSwap(swap) {
   return ["Open", "Awaiting Approvals"].includes(deriveSwapStatus(swap));
+}
+
+function isUpcomingCourt(record) {
+  const activeStatus = !["Appeared", "Canceled"].includes(record.status);
+  return activeStatus && String(record.date || "") >= isoToday;
 }
 
 function canAcceptSwap(swap) {
