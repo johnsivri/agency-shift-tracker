@@ -32,7 +32,7 @@ A small browser-based tracker for agency shift operations.
 3. Add officer, supervisor, and admin users in Supabase Auth.
 4. Add matching rows in `public.profiles`.
 5. Add your project URL and anon key to `app-config.js`.
-6. If your database was created before newer features were added, run the helper SQL files listed below.
+6. If your database was created before newer features were added, run `supabase/existing-database-updates.sql`.
 
 ### What Step 4 Means
 
@@ -64,7 +64,11 @@ After sign-in, officers are locked to their own profile view. Supervisors and ad
 
 ### Incremental SQL Helpers
 
-If you already ran `supabase/schema.sql` before these features were added, run these helper files in Supabase SQL Editor:
+If you already ran `supabase/schema.sql`, do not rerun the full schema on the same database. Run this consolidated helper in Supabase SQL Editor instead:
+
+- `supabase/existing-database-updates.sql`
+
+The older feature-specific helper files remain available if you only need one update:
 
 - `supabase/update-swap-accept-policy.sql`
 - `supabase/update-court-event-policies.sql`

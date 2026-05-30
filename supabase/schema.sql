@@ -1,5 +1,6 @@
 -- Agency Shift Tracker Supabase schema
 -- Run this in the Supabase SQL editor for the project.
+-- For an existing database, run supabase/existing-database-updates.sql instead.
 
 create extension if not exists pgcrypto;
 
