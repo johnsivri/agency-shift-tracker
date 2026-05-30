@@ -137,10 +137,16 @@ to authenticated
 using (public.is_admin())
 with check (public.is_admin());
 
-create policy "Authenticated users read activity logs"
+create policy "Supervisors and admins read activity logs"
 on public.activity_logs for select
 to authenticated
-using (true);
+using (
+  public.is_admin()
+  or exists (
+    select 1 from public.profiles
+    where id = auth.uid() and role = 'supervisor'
+  )
+);
 
 create policy "Authenticated users create activity logs"
 on public.activity_logs for insert

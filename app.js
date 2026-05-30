@@ -427,6 +427,9 @@ function render() {
     renderLockedState();
     return;
   }
+  if (currentProfile?.role === "officer" && document.querySelector("#tab-activity").classList.contains("is-active")) {
+    activateTab("court");
+  }
   const filters = getFilters();
   normalizeShiftRecords();
   normalizeSwapRecords();
@@ -1358,7 +1361,7 @@ async function loadSupabaseState(successMessage = "Shared Supabase data loaded."
       fetchSupabaseCourtEvents(profiles),
       fetchSupabaseSwapRequests(profiles)
     ]);
-    const activity = await fetchSupabaseActivity(profiles);
+    const activity = signedInProfile.role === "officer" ? [] : await fetchSupabaseActivity(profiles);
 
     currentProfile = signedInProfile;
     state = {

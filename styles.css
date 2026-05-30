@@ -170,7 +170,8 @@ body.is-signed-in .signed-out-only {
   display: none;
 }
 
-body.is-officer .court-management {
+body.is-officer .court-management,
+body.is-officer .management-only {
   display: none;
 }
 
