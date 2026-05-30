@@ -73,10 +73,21 @@ create table public.shift_swap_requests (
   updated_at timestamptz not null default now()
 );
 
+create table public.activity_logs (
+  id uuid primary key default gen_random_uuid(),
+  actor_id uuid references public.profiles(id) on delete set null,
+  record_type text not null check (record_type in ('court', 'swap')),
+  record_id uuid,
+  action text not null,
+  summary text,
+  created_at timestamptz not null default now()
+);
+
 alter table public.profiles enable row level security;
 alter table public.shift_assignments enable row level security;
 alter table public.traffic_court_events enable row level security;
 alter table public.shift_swap_requests enable row level security;
+alter table public.activity_logs enable row level security;
 
 create or replace function public.is_admin()
 returns boolean
@@ -125,6 +136,16 @@ on public.shift_assignments for all
 to authenticated
 using (public.is_admin())
 with check (public.is_admin());
+
+create policy "Authenticated users read activity logs"
+on public.activity_logs for select
+to authenticated
+using (true);
+
+create policy "Authenticated users create activity logs"
+on public.activity_logs for insert
+to authenticated
+with check (actor_id = auth.uid());
 
 create policy "Officers read own court events"
 on public.traffic_court_events for select

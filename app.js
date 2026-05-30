@@ -40,6 +40,7 @@ const seedData = {
     { id: uid(), date: nextCourtDate, officer: "Officer Jordan Lee", caseNumber: "26-1904", court: "Traffic Court", time: courtTimeForDate(nextCourtDate), duration: "2", status: "Scheduled", subpoena: true, notes: "Citation: T-26-1904; complainant: Morgan Gray; attorney: no" },
     { id: uid(), date: addDays(nextCourtDate, 2), officer: "Officer Taylor Brooks", caseNumber: "26-1931", court: "Traffic Court", time: courtTimeForDate(addDays(nextCourtDate, 2)), duration: "1.5", status: "Scheduled", subpoena: true, notes: "Citation: T-26-1931; complainant: Jamie Fox; attorney: yes" }
   ],
+  activity: [],
   swaps: [
     { id: uid(), requester: "Officer Maya Alvarez", acceptingOfficer: "", giveDate: nextWeek, giveShift: "B shift 0600-1800", takeDate: "", takeShift: "", requesterApproval: "Pending", requesterSupervisorApproval: "Pending", acceptingSupervisorApproval: "Pending", status: "Open", notes: "Requester supervisor: Sgt. Elena Rivera" },
     { id: uid(), requester: "Officer Sam Patel", acceptingOfficer: "Officer Chris Morgan", giveDate: addDays(isoToday, 8), giveShift: "D shift 1800-0600", takeDate: addDays(isoToday, 10), takeShift: "A shift 0600-1800", requesterApproval: "Approved", requesterSupervisorApproval: "Pending", acceptingSupervisorApproval: "Pending", status: "Awaiting Approvals", notes: "Requester supervisor: Sgt. Marcus Chen; accepting supervisor: Sgt. Elena Rivera" },
@@ -67,6 +68,8 @@ const els = {
   courtCards: document.querySelector("#courtCards"),
   swapRows: document.querySelector("#swapRows"),
   swapCards: document.querySelector("#swapCards"),
+  activityRows: document.querySelector("#activityRows"),
+  activityCards: document.querySelector("#activityCards"),
   courtHours: document.querySelector("#courtHours"),
   courtCount: document.querySelector("#courtCount"),
   swapCount: document.querySelector("#swapCount"),
@@ -193,6 +196,7 @@ async function saveForm(collection, form, fields) {
     const saved = collection === "court" ? await saveSupabaseCourt(item) : await saveSupabaseSwap(item);
     if (!saved) return;
     await loadSupabaseState(collection === "court" ? "Court record saved." : "Shift swap saved.");
+    await recordActivity(collection === "court" ? "court" : "swap", item.id, item.id && isUuid(item.id) ? "updated" : "created", collection === "court" ? courtSummary(item) : swapSummary(item));
   } else {
     const index = state[collection].findIndex((record) => record.id === item.id);
     if (index >= 0) {
@@ -202,6 +206,7 @@ async function saveForm(collection, form, fields) {
     }
     populateUnitFilter();
     persist();
+    addLocalActivity(collection === "court" ? "court" : "swap", collection === "court" ? "saved" : "saved", collection === "court" ? courtSummary(item) : swapSummary(item));
     render();
   }
 
@@ -245,12 +250,14 @@ async function importCourtRows(event) {
       const saved = await saveSupabaseCourt(record);
       if (!saved) return;
     }
+    await recordActivity("court", null, "imported", `${records.length} court records imported`);
     form.reset();
     await loadSupabaseState(`${records.length} court records imported.`);
     return;
   }
 
   state.court.push(...records);
+  addLocalActivity("court", "imported", `${records.length} court records imported`);
   form.reset();
   populateUnitFilter();
   persist();
@@ -299,10 +306,12 @@ async function deleteRecord(collection, id) {
       return;
     }
     await loadSupabaseState("Record deleted.");
+    await recordActivity(collection === "court" ? "court" : "swap", id, "deleted", `${collection} record deleted`);
     return;
   }
 
   state[collection] = state[collection].filter((item) => item.id !== id);
+  addLocalActivity(collection === "court" ? "court" : "swap", "deleted", `${collection} record deleted`);
   populateUnitFilter();
   persist();
   render();
@@ -344,11 +353,13 @@ async function decideRequesterApproval(id, decision) {
     setStatus(`${decision} requester decision...`);
     const saved = await saveSupabaseSwap(updated);
     if (!saved) return;
+    await recordActivity("swap", updated.id, `requester ${decision.toLowerCase()}`, swapSummary(updated));
     await loadSupabaseState(`Swap proposal ${decision.toLowerCase()}.`);
     return;
   }
 
   state.swaps = state.swaps.map((item) => (item.id === id ? updated : item));
+  addLocalActivity("swap", `requester ${decision.toLowerCase()}`, swapSummary(updated));
   populateUnitFilter();
   persist();
   render();
@@ -370,11 +381,13 @@ async function decideSupervisorApproval(id, approvalKey, decision) {
     setStatus(`${decision} supervisor decision...`);
     const saved = await saveSupabaseSwap(updated);
     if (!saved) return;
+    await recordActivity("swap", updated.id, `supervisor ${decision.toLowerCase()}`, swapSummary(updated));
     await loadSupabaseState(`Supervisor decision ${decision.toLowerCase()}.`);
     return;
   }
 
   state.swaps = state.swaps.map((item) => (item.id === id ? updated : item));
+  addLocalActivity("swap", `supervisor ${decision.toLowerCase()}`, swapSummary(updated));
   populateUnitFilter();
   persist();
   render();
@@ -395,11 +408,13 @@ async function updateCourtStatus(id, status) {
     setStatus(`Marking court ${status.toLowerCase()}...`);
     const saved = await saveSupabaseCourt(updated);
     if (!saved) return;
+    await recordActivity("court", updated.id, `marked ${status.toLowerCase()}`, courtSummary(updated));
     await loadSupabaseState(`Court marked ${status.toLowerCase()}.`);
     return;
   }
 
   state.court = state.court.map((item) => (item.id === id ? updated : item));
+  addLocalActivity("court", `marked ${status.toLowerCase()}`, courtSummary(updated));
   populateUnitFilter();
   persist();
   render();
@@ -438,6 +453,7 @@ function render() {
     rowActions("swaps", item.id, item)
   ], 8, "No matching swap records. Active swaps remain visible regardless of month.");
   renderSwapCards(swaps);
+  renderActivity();
 
   renderSummary(filters);
   renderActiveSwapRequests();
@@ -482,6 +498,35 @@ function renderSwapCards(swaps) {
     approvals.textContent = approvalSummary(item);
     card.append(title, officers, details, approvals, rowActions("swaps", item.id, item));
     els.swapCards.appendChild(card);
+  });
+}
+
+function renderActivity() {
+  const items = [...(state.activity || [])].sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+  renderRows(els.activityRows, items.slice(0, 50), (item) => [
+    formatDateTime(item.createdAt),
+    item.actor || "-",
+    item.recordType || "-",
+    item.action || "-",
+    item.summary || "-"
+  ], 5, "No activity recorded yet.");
+
+  els.activityCards.innerHTML = "";
+  if (!items.length) {
+    els.activityCards.appendChild(emptyCard("No activity recorded yet."));
+    return;
+  }
+  items.slice(0, 50).forEach((item) => {
+    const card = document.createElement("article");
+    card.className = "mobile-card";
+    const title = document.createElement("h3");
+    title.textContent = `${item.recordType} - ${item.action}`;
+    const actor = document.createElement("p");
+    actor.textContent = `${item.actor || "Unknown"} - ${formatDateTime(item.createdAt)}`;
+    const summary = document.createElement("p");
+    summary.textContent = item.summary || "-";
+    card.append(title, actor, summary);
+    els.activityCards.appendChild(card);
   });
 }
 
@@ -1096,6 +1141,19 @@ function formatDate(value) {
   return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(date);
 }
 
+function formatDateTime(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  }).format(date);
+}
+
 function toDateInput(date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -1127,6 +1185,7 @@ function emptyState() {
     roster: [],
     shifts: [],
     court: [],
+    activity: [],
     swaps: []
   };
 }
@@ -1143,6 +1202,8 @@ function renderLockedState() {
   els.courtCards.innerHTML = "";
   els.swapRows.innerHTML = "";
   els.swapCards.innerHTML = "";
+  els.activityRows.innerHTML = "";
+  els.activityCards.innerHTML = "";
   updateAccessVisibility();
 }
 
@@ -1159,7 +1220,8 @@ function exportCsv() {
     ["roster", state.roster || []],
     ["shifts", state.shifts],
     ["court", state.court],
-    ["swaps", state.swaps]
+    ["swaps", state.swaps],
+    ["activity", state.activity || []]
   ];
   const rows = [["section", "data"]];
   sections.forEach(([section, records]) => {
@@ -1267,6 +1329,7 @@ async function loadSupabaseState(successMessage = "Shared Supabase data loaded."
       fetchSupabaseCourtEvents(profiles),
       fetchSupabaseSwapRequests(profiles)
     ]);
+    const activity = await fetchSupabaseActivity(profiles);
 
     currentProfile = signedInProfile;
     state = {
@@ -1279,6 +1342,7 @@ async function loadSupabaseState(successMessage = "Shared Supabase data loaded."
       })),
       shifts,
       court,
+      activity,
       swaps
     };
     updateAccessVisibility();
@@ -1387,6 +1451,28 @@ async function fetchSupabaseSwapRequests(profiles) {
   }));
 }
 
+async function fetchSupabaseActivity(profiles) {
+  const { data, error } = await withSupabaseTimeout(
+    supabaseClient
+      .from("activity_logs")
+      .select("id, actor_id, record_type, record_id, action, summary, created_at")
+      .order("created_at", { ascending: false })
+      .limit(100),
+    "activity logs"
+  );
+  if (error) return [];
+  return (data || []).map((row) => ({
+    id: row.id,
+    actorId: row.actor_id,
+    actor: profileName(profiles, row.actor_id),
+    recordType: row.record_type,
+    recordId: row.record_id,
+    action: row.action,
+    summary: row.summary,
+    createdAt: row.created_at
+  }));
+}
+
 async function saveSupabaseCourt(item) {
   const officerId = profileIdByName(item.officer);
   if (!officerId) {
@@ -1419,6 +1505,62 @@ async function saveSupabaseCourt(item) {
     return false;
   }
   return true;
+}
+
+async function recordActivity(recordType, recordId, action, summary) {
+  const entry = {
+    id: uid(),
+    actorId: currentProfile?.id || "",
+    actor: currentProfile?.display_name || "",
+    recordType,
+    recordId: isUuid(recordId) ? recordId : null,
+    action,
+    summary,
+    createdAt: new Date().toISOString()
+  };
+  state.activity = [entry, ...(state.activity || [])].slice(0, 100);
+
+  if (!isRemoteMode()) {
+    persist();
+    render();
+    return;
+  }
+
+  const payload = {
+    actor_id: currentProfile.id,
+    record_type: recordType,
+    record_id: entry.recordId,
+    action,
+    summary
+  };
+  try {
+    const { error } = await withSupabaseTimeout(supabaseClient.from("activity_logs").insert(payload), "activity log insert");
+    if (error) throw error;
+  } catch (error) {
+    setStatus(`Saved, but activity log failed: ${error.message}`);
+  }
+  render();
+}
+
+function addLocalActivity(recordType, action, summary) {
+  state.activity = [{
+    id: uid(),
+    actorId: currentProfile?.id || "",
+    actor: currentProfile?.display_name || "Local demo",
+    recordType,
+    recordId: "",
+    action,
+    summary,
+    createdAt: new Date().toISOString()
+  }, ...(state.activity || [])].slice(0, 100);
+}
+
+function courtSummary(item) {
+  return `${item.officer || "Officer"} - ${item.caseNumber || "court"} on ${item.date || "unknown date"}`;
+}
+
+function swapSummary(item) {
+  return `${item.requester || "Requester"} -> ${item.acceptingOfficer || "open"} for ${item.giveDate || "unknown date"}`;
 }
 
 async function saveSupabaseSwap(item) {
