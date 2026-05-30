@@ -380,6 +380,31 @@ async function decideSupervisorApproval(id, approvalKey, decision) {
   render();
 }
 
+async function updateCourtStatus(id, status) {
+  const court = state.court.find((item) => item.id === id);
+  if (!court || !canUpdateCourtStatus(court)) {
+    setStatus("Only admins or the officer's assigned supervisor can update court status.");
+    return;
+  }
+  const updated = {
+    ...court,
+    status
+  };
+
+  if (isRemoteMode()) {
+    setStatus(`Marking court ${status.toLowerCase()}...`);
+    const saved = await saveSupabaseCourt(updated);
+    if (!saved) return;
+    await loadSupabaseState(`Court marked ${status.toLowerCase()}.`);
+    return;
+  }
+
+  state.court = state.court.map((item) => (item.id === id ? updated : item));
+  populateUnitFilter();
+  persist();
+  render();
+}
+
 function render() {
   if (!canViewData()) {
     renderLockedState();
@@ -498,6 +523,16 @@ function renderRows(target, rows, mapRow, colSpan = 7, emptyMessage = "No matchi
 function rowActions(collection, id, item = null) {
   const wrapper = document.createElement("div");
   wrapper.className = "row-actions";
+  if (collection === "court" && canUpdateCourtStatus(item)) {
+    courtStatusActions(item).forEach(({ label, status }) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = status === "Canceled" ? "ghost compact" : "primary compact";
+      button.textContent = label;
+      button.addEventListener("click", () => updateCourtStatus(id, status));
+      wrapper.appendChild(button);
+    });
+  }
   if (collection === "swaps" && canAcceptSwap(item)) {
     const accept = document.createElement("button");
     accept.type = "button";
@@ -849,7 +884,7 @@ function canDeleteRecord(collection, record) {
   if (!record || !currentProfile) return false;
   if (currentProfile.role === "admin") return true;
   if (collection === "court") {
-    return record.officer === currentProfile.display_name || isSupervisorForName(record.officer);
+    return false;
   }
   if (collection === "swaps") {
     return record.requester === currentProfile.display_name && !record.acceptingOfficer;
@@ -861,6 +896,18 @@ function canManageCourtRecord(record) {
   if (!record || !currentProfile) return false;
   if (currentProfile.role === "admin") return true;
   return currentProfile.role === "supervisor" && isSupervisorForName(record.officer);
+}
+
+function canUpdateCourtStatus(record) {
+  return Boolean(record && canManageCourtRecord(record) && !["Appeared", "Canceled"].includes(record.status));
+}
+
+function courtStatusActions(record) {
+  const actions = [];
+  if (record.status !== "Appeared") actions.push({ label: "Mark Appeared", status: "Appeared" });
+  if (record.status !== "Continued") actions.push({ label: "Continue", status: "Continued" });
+  if (record.status !== "Canceled") actions.push({ label: "Cancel", status: "Canceled" });
+  return actions;
 }
 
 function supervisorDecisionActions(swap) {
