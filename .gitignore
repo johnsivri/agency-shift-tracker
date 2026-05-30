@@ -1,1 +1,8 @@
 server.log
+.env
+.env.*
+*.log
+*pass*.txt
+*password*.txt
+supabase/*pass*.txt
+supabase/*password*.txt

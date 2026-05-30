@@ -11,17 +11,19 @@ A small browser-based tracker for agency shift operations.
 - Traffic court schedule rules for Tuesdays at 1330 and Thursdays at 0900
 - Traffic court hours are tracked separately from shift hours
 - Court appearance tracking with case numbers, subpoena status, duration, and notes
+- Court batch import for supervisor/admin pasted CSV rows
+- Court status actions for supervisors/admins
 - Shift swap tracking with a requesting officer, accepting officer, and required approvals
 - Swap approval tracking for the requesting officer, requester's supervisor, and accepting officer's supervisor
+- Shift swap workflow actions for accept, requester approve/deny, and supervisor approve/deny
 - Patrol-unit scoped views for each unit's own shifts, court, and swap information
 - Open shift swap request sidebar shared across patrol units
+- Activity audit trail for recent court and swap workflow actions
 - Month and search filters
 - Supabase-backed secure access panel
 - Signed-in users load shared court, roster, shift assignment, and swap data from Supabase
 - Mobile card views for court and shift swap records
-- Local demo roster with two supervisors and six officers
 - CSV export and print view
-- Local browser storage
 
 ## Supabase Setup
 
@@ -30,6 +32,7 @@ A small browser-based tracker for agency shift operations.
 3. Add officer, supervisor, and admin users in Supabase Auth.
 4. Add matching rows in `public.profiles`.
 5. Add your project URL and anon key to `app-config.js`.
+6. If your database was created before newer features were added, run the helper SQL files listed below.
 
 ### What Step 4 Means
 
@@ -55,13 +58,30 @@ You can find each UUID in Supabase under Authentication > Users.
 
 For test data, `supabase/demo-profiles-template.sql` includes two supervisors and six officers. Replace the placeholder UUIDs with real Auth user UUIDs before running it.
 
-The app will remain in local demo mode until `app-config.js` has Supabase values.
+The app requires Supabase login before tracker data is shown.
 
 After sign-in, officers are locked to their own profile view. Supervisors and admins can use the Patrol Unit selector to view records that Supabase Row Level Security allows them to access.
 
-If you already ran `supabase/schema.sql` before this point, run `supabase/update-swap-accept-policy.sql` so authenticated officers can accept open swap requests.
+### Incremental SQL Helpers
+
+If you already ran `supabase/schema.sql` before these features were added, run these helper files in Supabase SQL Editor:
+
+- `supabase/update-swap-accept-policy.sql`
+- `supabase/update-court-event-policies.sql`
+- `supabase/add-activity-logs.sql`
 
 Security notes and RLS expectations are in `SECURITY.md`.
+
+## Court Import Format
+
+Paste rows into the Court Batch Import box using:
+
+```csv
+date,officer,citation,complainant,attorney,hours,notes
+2026-06-02,Officer Jordan Lee,T-26-1904,Morgan Gray,no,2,Scanned traffic court list
+```
+
+Supervisors can import only for officers assigned to them. Admins can import for any officer.
 
 ## Run Locally
 
