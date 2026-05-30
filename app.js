@@ -70,6 +70,8 @@ const els = {
   swapCards: document.querySelector("#swapCards"),
   activityRows: document.querySelector("#activityRows"),
   activityCards: document.querySelector("#activityCards"),
+  officerOptions: document.querySelector("#officerOptions"),
+  shiftOptions: document.querySelector("#shiftOptions"),
   courtHours: document.querySelector("#courtHours"),
   courtCount: document.querySelector("#courtCount"),
   swapCount: document.querySelector("#swapCount"),
@@ -757,7 +759,31 @@ function populateUnitFilter() {
   els.unitFilter.value = units.includes(current) ? current : units[0] || "";
   if (isRemoteMode() && currentProfile.role !== "officer" && !current) els.unitFilter.value = "";
   els.unitFilter.disabled = isRemoteMode() && currentProfile.role === "officer";
+  populateDatalists(units);
   applyCurrentProfileDefaults();
+}
+
+function populateDatalists(units) {
+  const officerNames = units?.length ? units : getUnitNames();
+  els.officerOptions.innerHTML = "";
+  officerNames.forEach((name) => {
+    const option = document.createElement("option");
+    option.value = name;
+    els.officerOptions.appendChild(option);
+  });
+
+  els.shiftOptions.innerHTML = "";
+  shiftOptionValues().forEach((shift) => {
+    const option = document.createElement("option");
+    option.value = shift;
+    els.shiftOptions.appendChild(option);
+  });
+}
+
+function shiftOptionValues() {
+  return Object.entries(SHIFT_DEFINITIONS).map(([name, definition]) => (
+    `${name} shift ${definition.start.replace(":", "")}-${definition.end.replace(":", "")}`
+  ));
 }
 
 function getUnitNames() {
@@ -1479,7 +1505,7 @@ async function fetchSupabaseActivity(profiles) {
 async function saveSupabaseCourt(item) {
   const officerId = profileIdByName(item.officer);
   if (!officerId) {
-    setStatus("Court save failed: choose an officer from the roster.");
+    setStatus("Court save failed: choose an officer from the roster suggestions.");
     return false;
   }
   const existing = state.court.find((record) => record.id === item.id) || {};
@@ -1571,6 +1597,10 @@ async function saveSupabaseSwap(item) {
     ? currentProfile.id
     : profileIdByName(item.requester) || currentProfile?.id;
   const acceptingOfficerId = profileIdByName(item.acceptingOfficer);
+  if (item.acceptingOfficer && !acceptingOfficerId) {
+    setStatus("Swap save failed: choose the accepting officer from the roster suggestions.");
+    return false;
+  }
   if (!requesterId) {
     setStatus("Swap save failed: signed-in profile could not be matched to a requester.");
     return false;

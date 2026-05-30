@@ -89,7 +89,7 @@
           <form id="courtForm" class="entry-form court-management">
             <input type="hidden" name="id" />
             <label class="field"><span>Date</span><input type="date" name="date" required /></label>
-            <label class="field"><span>Officer</span><input name="officer" required placeholder="Name" /></label>
+            <label class="field"><span>Officer</span><input name="officer" list="officerOptions" required placeholder="Name" /></label>
             <label class="field"><span>Case No.</span><input name="caseNumber" required placeholder="Case" /></label>
             <label class="field"><span>Court</span><input name="court" placeholder="Court / room" /></label>
             <label class="field"><span>Time</span><input type="time" name="time" required readonly /></label>
@@ -124,12 +124,12 @@
           </div>
           <form id="swapForm" class="entry-form">
             <input type="hidden" name="id" />
-            <label class="field"><span>Requesting Officer</span><input name="requester" required placeholder="Name" /></label>
-            <label class="field"><span>Accepting Officer</span><input name="acceptingOfficer" placeholder="Any officer can accept" /></label>
+            <label class="field"><span>Requesting Officer</span><input name="requester" list="officerOptions" required placeholder="Name" /></label>
+            <label class="field"><span>Accepting Officer</span><input name="acceptingOfficer" list="officerOptions" placeholder="Any officer can accept" /></label>
             <label class="field"><span>Give Date</span><input type="date" name="giveDate" required /></label>
-            <label class="field"><span>Give Shift</span><input name="giveShift" placeholder="0700-1500" /></label>
+            <label class="field"><span>Give Shift</span><input name="giveShift" list="shiftOptions" placeholder="A shift 0600-1800" /></label>
             <label class="field"><span>Take Date</span><input type="date" name="takeDate" /></label>
-            <label class="field"><span>Take Shift</span><input name="takeShift" placeholder="Optional until accepted" /></label>
+            <label class="field"><span>Take Shift</span><input name="takeShift" list="shiftOptions" placeholder="Optional until accepted" /></label>
             <label class="field wide"><span>Notes</span><input name="notes" placeholder="Supervisor notes" /></label>
             <button class="primary" type="submit">Save Swap</button>
           </form>
@@ -161,6 +161,8 @@
     </main>
 
     <script src="app-config.js"></script>
+    <datalist id="officerOptions"></datalist>
+    <datalist id="shiftOptions"></datalist>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="app.js"></script>
   </body>
