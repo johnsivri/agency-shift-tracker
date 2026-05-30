@@ -170,6 +170,10 @@ body.is-signed-in .signed-out-only {
   display: none;
 }
 
+body.is-officer .court-management {
+  display: none;
+}
+
 body.is-signed-out .app-shell {
   grid-template-columns: minmax(280px, 440px);
   justify-content: center;

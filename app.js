@@ -1295,6 +1295,9 @@ function updateAuthState() {
 function updateAccessVisibility() {
   document.body.classList.toggle("is-signed-in", canViewData());
   document.body.classList.toggle("is-signed-out", !canViewData());
+  document.body.classList.toggle("is-officer", currentProfile?.role === "officer");
+  document.body.classList.toggle("is-supervisor", currentProfile?.role === "supervisor");
+  document.body.classList.toggle("is-admin", currentProfile?.role === "admin");
 }
 
 function canViewData() {
@@ -1638,7 +1641,7 @@ function applyCurrentProfileDefaults() {
   if (!currentProfile) return;
   const courtForm = document.querySelector("#courtForm");
   const swapForm = document.querySelector("#swapForm");
-  if (courtForm && !courtForm.elements.officer.value) courtForm.elements.officer.value = currentProfile.display_name;
+  if (courtForm && !courtForm.elements.officer.value && currentProfile.role === "officer") courtForm.elements.officer.value = currentProfile.display_name;
   if (swapForm && !swapForm.elements.requester.value) swapForm.elements.requester.value = currentProfile.display_name;
   const isOfficer = currentProfile.role === "officer";
   if (courtForm) courtForm.elements.officer.readOnly = isOfficer;

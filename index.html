@@ -86,7 +86,7 @@
               <p>Track Tuesday 1330 and Thursday 0900 traffic court appearances.</p>
             </div>
           </div>
-          <form id="courtForm" class="entry-form">
+          <form id="courtForm" class="entry-form court-management">
             <input type="hidden" name="id" />
             <label class="field"><span>Date</span><input type="date" name="date" required /></label>
             <label class="field"><span>Officer</span><input name="officer" required placeholder="Name" /></label>
@@ -99,7 +99,7 @@
             <label class="field wide"><span>Notes</span><input name="notes" placeholder="Optional notes" /></label>
             <button class="primary" type="submit">Save Court</button>
           </form>
-          <form id="courtImportForm" class="import-form">
+          <form id="courtImportForm" class="import-form court-management">
             <label class="field wide">
               <span>Batch Import</span>
               <textarea name="courtImport" rows="5" placeholder="date,officer,citation,complainant,attorney,hours,notes"></textarea>
