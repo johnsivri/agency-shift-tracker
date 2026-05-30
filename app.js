@@ -59,6 +59,7 @@ const els = {
   authState: document.querySelector("#authState"),
   accountState: document.querySelector("#accountState"),
   signOut: document.querySelector("#signOut"),
+  courtImportForm: document.querySelector("#courtImportForm"),
   monthFilter: document.querySelector("#monthFilter"),
   unitFilter: document.querySelector("#unitFilter"),
   searchFilter: document.querySelector("#searchFilter"),
@@ -97,6 +98,8 @@ document.querySelector("#courtForm").addEventListener("submit", async (event) =>
   if (!applyCourtTime(event.currentTarget)) return;
   await saveForm("court", event.currentTarget, ["date", "officer", "caseNumber", "court", "time", "duration", "status", "subpoena", "notes"]);
 });
+
+els.courtImportForm.addEventListener("submit", importCourtRows);
 
 document.querySelector("#swapForm").addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -205,6 +208,49 @@ async function saveForm(collection, form, fields) {
     form.elements.takeDate.required = false;
     form.elements.takeShift.required = false;
   }
+}
+
+async function importCourtRows(event) {
+  event.preventDefault();
+  if (!canViewData()) {
+    setStatus("Sign in before importing court records.");
+    return;
+  }
+  if (!["supervisor", "admin"].includes(currentProfile.role)) {
+    setStatus("Court import is limited to supervisors and admins.");
+    return;
+  }
+
+  const form = event.currentTarget;
+  const text = form.elements.courtImport.value.trim();
+  const records = parseCourtImport(text);
+  if (!records.length) {
+    setStatus("Paste at least one court row to import.");
+    return;
+  }
+
+  const invalid = records.find((record) => !courtTimeForDate(record.date) || !profileIdByName(record.officer));
+  if (invalid) {
+    setStatus(`Court import failed: check date/officer for ${invalid.caseNumber || "one row"}.`);
+    return;
+  }
+
+  if (isRemoteMode()) {
+    setStatus(`Importing ${records.length} court records...`);
+    for (const record of records) {
+      const saved = await saveSupabaseCourt(record);
+      if (!saved) return;
+    }
+    form.reset();
+    await loadSupabaseState(`${records.length} court records imported.`);
+    return;
+  }
+
+  state.court.push(...records);
+  form.reset();
+  populateUnitFilter();
+  persist();
+  render();
 }
 
 function editRecord(collection, id) {
@@ -767,7 +813,7 @@ function canEditRecord(collection, record) {
   if (!record || !currentProfile) return false;
   if (currentProfile.role === "admin") return true;
   if (collection === "court") {
-    return record.officer === currentProfile.display_name || isSupervisorForName(record.officer);
+    return false;
   }
   if (collection === "swaps") {
     if (record.requester === currentProfile.display_name) {
@@ -857,6 +903,64 @@ function applyCourtTime(form) {
     return false;
   }
   return true;
+}
+
+function parseCourtImport(text) {
+  return String(text || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line, index) => index > 0 || !line.toLowerCase().startsWith("date,"))
+    .map(parseCourtImportLine)
+    .filter(Boolean);
+}
+
+function parseCourtImportLine(line) {
+  const [date, officer, citation, complainant, attorney, hours, notes] = parseCsvLine(line);
+  if (!date || !officer || !citation) return null;
+  const time = courtTimeForDate(date);
+  const attorneyText = String(attorney || "").trim().toLowerCase();
+  const hasAttorney = ["yes", "y", "true", "1", "attorney", "lawyer"].includes(attorneyText);
+  const noteParts = [];
+  if (complainant) noteParts.push(`Complainant: ${complainant}`);
+  noteParts.push(`Attorney: ${hasAttorney ? "yes" : "no"}`);
+  if (notes) noteParts.push(notes);
+  return {
+    id: uid(),
+    date,
+    officer: officer.trim(),
+    caseNumber: citation.trim(),
+    complainant: String(complainant || "").trim(),
+    hasAttorney,
+    court: "Traffic Court",
+    time,
+    duration: String(hours || 2).trim(),
+    status: "Scheduled",
+    subpoena: true,
+    notes: noteParts.join("; ")
+  };
+}
+
+function parseCsvLine(line) {
+  const values = [];
+  let value = "";
+  let quoted = false;
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index];
+    if (char === '"' && line[index + 1] === '"') {
+      value += '"';
+      index += 1;
+    } else if (char === '"') {
+      quoted = !quoted;
+    } else if (char === "," && !quoted) {
+      values.push(value.trim());
+      value = "";
+    } else {
+      value += char;
+    }
+  }
+  values.push(value.trim());
+  return values;
 }
 
 function courtTimeForDate(value) {
@@ -1175,6 +1279,8 @@ async function fetchSupabaseCourtEvents(profiles) {
     time: trimTime(row.court_time),
     duration: String(row.court_hours || 0),
     caseNumber: row.citation_number,
+    complainant: row.complainant || "",
+    hasAttorney: Boolean(row.has_attorney),
     court: row.court_location || "Traffic Court",
     status: row.status,
     subpoena: true,
@@ -1215,12 +1321,15 @@ async function saveSupabaseCourt(item) {
     setStatus("Court save failed: choose an officer from the roster.");
     return false;
   }
+  const existing = state.court.find((record) => record.id === item.id) || {};
   const payload = {
     officer_id: officerId,
     court_date: item.date,
     court_time: item.time,
     court_hours: Number(item.duration || 0),
     citation_number: item.caseNumber,
+    complainant: item.complainant || existing.complainant || "",
+    has_attorney: Boolean(item.hasAttorney ?? existing.hasAttorney),
     court_location: item.court || "Traffic Court",
     status: item.status,
     notes: item.notes || "",

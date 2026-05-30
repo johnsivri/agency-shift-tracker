@@ -197,7 +197,8 @@ body.is-signed-out .app-shell {
 }
 
 input,
-select {
+select,
+textarea {
   width: 100%;
   min-height: 40px;
   border: 1px solid var(--line);
@@ -209,9 +210,15 @@ select {
 
 input:focus,
 select:focus,
+textarea:focus,
 button:focus-visible {
   outline: 3px solid rgba(36, 93, 130, 0.22);
   outline-offset: 2px;
+}
+
+textarea {
+  min-height: 112px;
+  resize: vertical;
 }
 
 .check-field {
@@ -368,6 +375,16 @@ button:focus-visible {
   grid-template-columns: repeat(4, minmax(140px, 1fr));
   gap: 12px;
   padding: 16px 18px 18px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(248, 250, 247, 0.75);
+}
+
+.import-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+  padding: 0 18px 18px;
   border-bottom: 1px solid var(--line);
   background: rgba(248, 250, 247, 0.75);
 }
@@ -537,6 +554,7 @@ tbody tr:hover {
 
   .sidebar,
   .entry-form,
+  .import-form,
   .quick-summary {
     grid-template-columns: 1fr;
   }
@@ -581,6 +599,7 @@ tbody tr:hover {
   .topbar,
   .tabs,
   .entry-form,
+  .import-form,
   .sidebar,
   .row-actions {
     display: none;

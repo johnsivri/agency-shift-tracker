@@ -137,6 +137,17 @@ to authenticated
 using (public.is_admin())
 with check (public.is_admin());
 
+create policy "Supervisors create court events for assigned officers"
+on public.traffic_court_events for insert
+to authenticated
+with check (public.is_supervisor_for(officer_id));
+
+create policy "Supervisors update court events for assigned officers"
+on public.traffic_court_events for update
+to authenticated
+using (public.is_supervisor_for(officer_id))
+with check (public.is_supervisor_for(officer_id));
+
 create policy "Open swap requests visible to authenticated officers"
 on public.shift_swap_requests for select
 to authenticated
